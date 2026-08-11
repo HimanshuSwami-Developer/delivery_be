@@ -40,6 +40,18 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
+# Auth here is JWT-in-header (djangorestframework-simplejwt), never cookies,
+# so a wide-open CORS policy doesn't carry the usual CSRF-via-cookie risk —
+# it just lets the Flutter web build (served from a LAN IP + changing dev
+# port, e.g. http://192.168.9.153:8766) call this API at all. Tighten to
+# explicit origins via CORS_ALLOWED_ORIGINS once DJANGO_DEBUG is off.
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
 
 # Application definition
 
@@ -50,6 +62,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'django_filters',
     'drf_spectacular',
@@ -67,6 +80,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # As high as possible, and before CommonMiddleware — CORS headers must
+    # land on preflight (OPTIONS) responses too, which CommonMiddleware's
+    # redirects would otherwise short-circuit without them.
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -233,7 +250,7 @@ MASTER_OTP = os.environ.get("MASTER_OTP", "123456")
 # Leave empty to allow the master OTP for ANY mobile number.
 # Or restrict it to specific test numbers, e.g. ["+919999999999", "+911234567890"]
 MASTER_OTP_MOBILE_NUMBERS = [
-    n for n in os.environ.get("MASTER_OTP_MOBILE_NUMBERS", "").split(",") if n
+    n for n in os.environ.get("MASTER_OTP_MOBILE_NUMBERS", "9718751020").split(",") if n
 ]
 
 
