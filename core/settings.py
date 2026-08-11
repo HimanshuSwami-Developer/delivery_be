@@ -45,7 +45,7 @@ ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
 # it just lets the Flutter web build (served from a LAN IP + changing dev
 # port, e.g. http://192.168.9.153:8766) call this API at all. Tighten to
 # explicit origins via CORS_ALLOWED_ORIGINS once DJANGO_DEBUG is off.
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_ALL_ORIGINS = DEBUG or os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False") == "True"
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
