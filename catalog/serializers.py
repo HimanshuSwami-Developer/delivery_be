@@ -6,7 +6,7 @@ from .models import Category, Product, ProductImage, ProductReview, ProductStock
 class SubcategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Subcategory
-        fields = ["id", "category", "name", "order"]
+        fields = ["id", "category", "name", "image_url", "order"]
         read_only_fields = ["id"]
 
 
@@ -17,7 +17,7 @@ class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = [
-            "id", "key", "name", "icon", "image_url", "order",
+            "id", "key", "name", "image_url", "order",
             "subs", "product_count", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]

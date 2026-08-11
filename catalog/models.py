@@ -7,8 +7,7 @@ from core.helper.base import BaseModel
 class Category(BaseModel):
     key = models.SlugField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
-    icon = models.CharField(max_length=10, blank=True, help_text="Emoji/glyph shown in the UI, e.g. '◈'.")
-    image_url = models.URLField(blank=True)
+    image_url = models.URLField(blank=True, help_text="Cloudinary secure_url — set via /images/upload/.")
     order = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -22,6 +21,7 @@ class Category(BaseModel):
 class Subcategory(BaseModel):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="subcategories")
     name = models.CharField(max_length=100)
+    image_url = models.URLField(blank=True, help_text="Cloudinary secure_url — set via /images/upload/.")
     order = models.PositiveIntegerField(default=0)
 
     class Meta:
