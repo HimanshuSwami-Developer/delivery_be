@@ -43,6 +43,7 @@ class SendOTPView(APIView):
     """POST /api/auth/send-otp/  -> generates + SMS's a fresh OTP."""
 
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_classes = [OTPRateThrottle]
 
     @extend_schema(
@@ -85,6 +86,7 @@ class ResendOTPView(APIView):
     """POST /api/auth/resend-otp/  -> re-sends a new OTP, rate-limited by a cooldown."""
 
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_classes = [OTPRateThrottle]
 
     @extend_schema(
@@ -144,6 +146,7 @@ class VerifyOTPView(APIView):
     """POST /api/auth/verify-otp/  -> checks OTP, logs in (creates user if new), returns JWT."""
 
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_classes = [OTPRateThrottle]
 
     @extend_schema(
@@ -222,6 +225,7 @@ class MasterOTPLoginView(APIView):
     """
 
     permission_classes = [AllowAny]
+    authentication_classes = []
     throttle_classes = [OTPRateThrottle]
 
     @extend_schema(
