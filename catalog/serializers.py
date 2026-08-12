@@ -32,8 +32,9 @@ class CategorySerializer(serializers.ModelSerializer):
 class ProductImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductImage
-        fields = ["id", "image_url", "order"]
+        fields = ["id", "product", "image_url", "order"]
         read_only_fields = ["id"]
+        extra_kwargs = {"product": {"write_only": True}}
 
 
 class ProductReviewSerializer(serializers.ModelSerializer):
