@@ -85,7 +85,7 @@ class OTP(models.Model):
 
     @staticmethod
     def generate_otp():
-        length = getattr(settings, "OTP_LENGTH", 6)
+        length = getattr(settings, "OTP_LENGTH", 4)
         return "".join(str(random.randint(0, 9)) for _ in range(length))
 
     def __str__(self):

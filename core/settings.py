@@ -237,7 +237,7 @@ SIMPLE_JWT = {
 # ---------------------------------------------------------------------------
 # OTP configuration
 # ---------------------------------------------------------------------------
-OTP_LENGTH = int(os.environ.get("OTP_LENGTH", 6))
+OTP_LENGTH = int(os.environ.get("OTP_LENGTH", 4))
 OTP_EXPIRY_MINUTES = int(os.environ.get("OTP_EXPIRY_MINUTES", 5))
 MAX_OTP_ATTEMPTS = int(os.environ.get("MAX_OTP_ATTEMPTS", 3))
 RESEND_OTP_WAIT_SECONDS = int(os.environ.get("RESEND_OTP_WAIT_SECONDS", 30))
