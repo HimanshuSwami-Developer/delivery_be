@@ -62,6 +62,28 @@ class User(AbstractBaseUser, PermissionsMixin):
         return f"{self.mobile_number} ({self.role})"
 
 
+class DeviceToken(BaseModel):
+    """
+    One row per device the app was ever registered on, keyed by the FCM
+    registration token itself (not per-user) — a token can only ever be
+    live on one device, so re-registering an existing token (a different
+    account logging in on the same phone, or the OS rotating the token)
+    reassigns the row instead of creating a duplicate.
+    """
+
+    class Platform(models.TextChoices):
+        ANDROID = "android", "Android"
+        IOS = "ios", "iOS"
+        WEB = "web", "Web"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="device_tokens")
+    token = models.CharField(max_length=255, unique=True, db_index=True)
+    platform = models.CharField(max_length=10, choices=Platform.choices)
+
+    def __str__(self):
+        return f"{self.user.mobile_number} ({self.platform})"
+
+
 class OTP(models.Model):
     """
     Stores every OTP that was generated (for real sends and resends).

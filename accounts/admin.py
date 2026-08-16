@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import OTP, Profile, User
+from .models import OTP, DeviceToken, Profile, User
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
@@ -33,4 +33,12 @@ class OTPAdmin(admin.ModelAdmin):
 class ProfileAdmin(admin.ModelAdmin):
     list_display = ["name", "user", "is_active", "is_delete", "created_at"]
     search_fields = ["name", "user__mobile_number"]
+    readonly_fields = ["created_at", "updated_at"]
+
+
+@admin.register(DeviceToken)
+class DeviceTokenAdmin(admin.ModelAdmin):
+    list_display = ["user", "platform", "token", "created_at", "updated_at"]
+    list_filter = ["platform"]
+    search_fields = ["user__mobile_number", "token"]
     readonly_fields = ["created_at", "updated_at"]

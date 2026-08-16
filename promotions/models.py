@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import models
 from django.db.models import Sum
 from django.utils import timezone
@@ -95,15 +97,62 @@ class Notification(BaseModel):
     def __str__(self):
         return self.title
 
-    def send(self):
-        """Marks the campaign sent and stamps `sent_count` from the matching
-        customer count. No real push-notification transport is wired up
-        here (and per-user open tracking doesn't exist), so `opened_count`
-        stays admin-editable/manual — this models the campaign ledger, not
-        an actual delivery pipeline."""
+    def _audience_queryset(self):
+        """Resolves `self.audience` to the matching User queryset. Deferred
+        imports of orders/cart avoid a circular import at module load time
+        (promotions is imported by cart/orders serializers)."""
         from accounts.models import User
 
         qs = User.objects.filter(role=User.Role.CUSTOMER, is_active=True)
-        self.sent_count = qs.count()
+
+        if self.audience == self.Audience.CART_ABANDONERS:
+            from cart.models import Cart
+
+            cutoff = timezone.now() - timedelta(hours=2)
+            abandoned_user_ids = (
+                Cart.objects.filter(items__isnull=False, updated_at__lt=cutoff)
+                .values_list("user_id", flat=True)
+                .distinct()
+            )
+            return qs.filter(id__in=abandoned_user_ids)
+
+        if self.audience == self.Audience.GOLD_PLATINUM:
+            from django.db.models import Count, Q
+
+            from orders.models import Order
+
+            # Matches accounts.views._tier_for's Gold threshold (25+ orders)
+            # — Gold and Platinum are both "25 or more", so one filter covers
+            # both tiers.
+            return qs.annotate(
+                orders_count=Count("orders", filter=~Q(orders__status=Order.Status.CANCELLED))
+            ).filter(orders_count__gte=25)
+
+        # ALL and TRANSACTIONAL (a content distinction, not a different
+        # recipient set — see Audience.TRANSACTIONAL) both target every
+        # active customer.
+        return qs
+
+    def send(self):
+        """Marks the campaign sent, resolves the target audience, and pushes
+        to every registered device of matching users via FCM (see
+        core.service.push_service — a no-op log line if push isn't
+        configured). Tokens FCM reports as unregistered get pruned from
+        DeviceToken so future campaigns don't keep hitting them. Per-user
+        open tracking doesn't exist, so `opened_count` stays
+        admin-editable/manual."""
+        from accounts.models import DeviceToken
+        from core.service.push_service import PushService
+
+        users = self._audience_queryset()
+        tokens = DeviceToken.objects.filter(user__in=users).values_list("token", flat=True)
+
+        _, invalid_tokens = PushService.send_to_tokens(
+            tokens, self.title, self.body, data={"notification_id": str(self.id)}
+        )
+        if invalid_tokens:
+            DeviceToken.objects.filter(token__in=invalid_tokens).delete()
+
+        self.sent_count = users.count()
         self.sent_at = timezone.now()
         self.save(update_fields=["sent_count", "sent_at", "updated_at"])

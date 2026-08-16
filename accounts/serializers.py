@@ -2,7 +2,7 @@ import re
 
 from rest_framework import serializers
 
-from .models import Profile
+from .models import DeviceToken, Profile
 
 MOBILE_REGEX = re.compile(r"^\+?[1-9]\d{9,14}$")
 
@@ -27,6 +27,11 @@ class ResendOTPSerializer(serializers.Serializer):
 
     def validate_mobile_number(self, value):
         return validate_mobile(value)
+
+
+class DeviceTokenSerializer(serializers.Serializer):
+    token = serializers.CharField(max_length=255)
+    platform = serializers.ChoiceField(choices=DeviceToken.Platform.choices)
 
 
 class VerifyOTPSerializer(serializers.Serializer):

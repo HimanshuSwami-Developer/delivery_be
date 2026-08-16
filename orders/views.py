@@ -55,6 +55,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
+        order.send_placed_push()
         return Response(OrderDetailSerializer(order).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(summary="Cancel my order (only while New/Packed)", responses={200: OrderDetailSerializer})

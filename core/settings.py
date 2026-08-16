@@ -272,6 +272,20 @@ MSG91_OTP_VAR = os.environ.get("MSG91_OTP_VAR", "OTP")
 
 
 # ---------------------------------------------------------------------------
+# Push notifications (Firebase Cloud Messaging)
+# ---------------------------------------------------------------------------
+# Path to the Firebase service-account JSON key (Firebase console -> Project
+# settings -> Service accounts -> Generate new private key). Keep this file
+# OUT of source control — point the env var at wherever you actually put it.
+# Push sends are a no-op (logged, not an error) when this isn't set, so
+# local dev works without a key. A relative path is resolved against
+# BASE_DIR so it works regardless of the process's working directory
+# (e.g. deployed on Vercel vs. `python manage.py runserver` locally).
+_firebase_creds = os.environ.get("FIREBASE_CREDENTIALS_PATH", "")
+FIREBASE_CREDENTIALS_PATH = str(BASE_DIR / _firebase_creds) if _firebase_creds and not os.path.isabs(_firebase_creds) else _firebase_creds
+
+
+# ---------------------------------------------------------------------------
 # Cloudinary (image storage for catalog product images)
 # ---------------------------------------------------------------------------
 # Used by core/helper/cloudinary_service.py — uploads go straight to

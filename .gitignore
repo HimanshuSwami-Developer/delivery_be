@@ -7,3 +7,7 @@ db.sqlite3.bak
 .venv/
 venv/
 *.egg-info/
+
+# Firebase service-account keys (grant full project access — never commit)
+*firebase-adminsdk*.json
+firebase-service-account.json

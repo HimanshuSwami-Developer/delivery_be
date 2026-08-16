@@ -12,9 +12,10 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import OTP, Profile, User
+from .models import OTP, DeviceToken, Profile, User
 from .serializers import (
     AddressItemSerializer,
+    DeviceTokenSerializer,
     GPSLocationItemSerializer,
     MasterOTPLoginSerializer,
     ProfileSerializer,
@@ -682,3 +683,29 @@ class AdminCustomerListView(APIView):
                 }
             )
         return Response(data)
+
+
+class RegisterDeviceView(APIView):
+    """
+    POST /api/auth/device-token/  -> upsert the caller's FCM registration
+    token, e.g. right after login or whenever the OS hands the app a fresh
+    one. Keyed by the token itself (not the user), so a token that was
+    previously registered to a different account gets reassigned rather
+    than duplicated.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["Auth - OTP"], summary="Register/refresh this device's FCM token", request=DeviceTokenSerializer)
+    def post(self, request):
+        serializer = DeviceTokenSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        DeviceToken.objects.update_or_create(
+            token=serializer.validated_data["token"],
+            defaults={
+                "user": request.user,
+                "platform": serializer.validated_data["platform"],
+            },
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)

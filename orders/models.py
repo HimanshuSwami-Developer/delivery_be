@@ -105,6 +105,14 @@ class Order(BaseModel):
         Status.CANCELLED: "cancelled_at",
     }
 
+    # Only the two terminal/outcome statuses push — "successful" (delivered)
+    # or "failed" (cancelled). The in-between statuses (packed, out for
+    # delivery) are tracking updates, not an outcome, so they stay silent.
+    _STATUS_PUSH_COPY = {
+        Status.DELIVERED: ("Order delivered", "Your order {order_number} has been delivered. Enjoy!"),
+        Status.CANCELLED: ("Order cancelled", "Your order {order_number} has been cancelled."),
+    }
+
     def set_status(self, new_status, save=True):
         self.status = new_status
         field = self._STATUS_TIMESTAMP_FIELD.get(new_status)
@@ -114,6 +122,29 @@ class Order(BaseModel):
             update_fields.append(field)
         if save:
             self.save(update_fields=update_fields)
+        self._send_push(*self._STATUS_PUSH_COPY.get(new_status, (None, None)))
+
+    def send_placed_push(self):
+        """Called once, right after `OrderViewSet.place` creates the order —
+        the "order successful" (placed) notification, distinct from the
+        later "delivered" one `set_status` sends."""
+        self._send_push("Order placed", "Your order {order_number} has been placed successfully.")
+
+    def _send_push(self, title, body_template):
+        if not title:
+            return
+        from accounts.models import DeviceToken
+        from core.service.push_service import PushService
+
+        tokens = DeviceToken.objects.filter(user=self.customer).values_list("token", flat=True)
+        _, invalid_tokens = PushService.send_to_tokens(
+            tokens,
+            title,
+            body_template.format(order_number=self.order_number),
+            data={"type": "order_status", "order_id": str(self.id), "status": self.status},
+        )
+        if invalid_tokens:
+            DeviceToken.objects.filter(token__in=invalid_tokens).delete()
 
 
 class OrderItem(BaseModel):

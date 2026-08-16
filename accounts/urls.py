@@ -8,6 +8,7 @@ from .views import (
     GPSLocationListCreateView,
     MasterOTPLoginView,
     ProfileView,
+    RegisterDeviceView,
     ResendOTPView,
     SendOTPView,
     VerifyOTPView,
@@ -20,6 +21,7 @@ urlpatterns = [
     path("resend-otp/", ResendOTPView.as_view(), name="resend-otp"),
     path("verify-otp/", VerifyOTPView.as_view(), name="verify-otp"),
     path("master-login/", MasterOTPLoginView.as_view(), name="master-login"),
+    path("device-token/", RegisterDeviceView.as_view(), name="device-token"),
 
     path("profile/", ProfileView.as_view(), name="profile"),
 

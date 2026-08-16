@@ -10,5 +10,6 @@ python-dotenv
 psycopg2-binary
 dj-database-url
 cloudinary
+firebase-admin
 # Uncomment if you switch SMS_BACKEND to "twilio" in settings.py
 # twilio==9.*
