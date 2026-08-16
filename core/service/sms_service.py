@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class SMSService:
     """
-    Sends OTP SMS via MSG91's Flow API.
+    Sends OTP SMS via MSG91's OTP Widget API.
 
     settings.SMS_BACKEND controls the implementation:
       - "console" : just logs/prints the OTP (local dev, no real SMS)
@@ -33,17 +33,20 @@ class SMSService:
     @staticmethod
     def _send_via_msg91(mobile_number: str, otp_code: str) -> bool:
         """
-        MSG91 Flow API (https://control.msg91.com/api/v5/flow).
+        MSG91 OTP Widget API (https://control.msg91.com/api/v5/otp) — NOT
+        the Flow/Campaigns API (different product, different endpoint and
+        request shape).
 
-        Prerequisite: create a DLT-approved OTP template in MSG91
-        (Campaigns -> Flow) with a variable, e.g.
-        "Your OTP is ##OTP##. Valid for 5 minutes." -> note the Template ID.
+        Prerequisite: create an OTP Widget in MSG91 (OTP -> Widget), which
+        auto-provisions a DLT-approved OTP template — note the Widget's
+        Template ID (MSG91_TEMPLATE_ID).
 
         Our own OTP model still generates the code, tracks expiry, and
-        counts attempts -- MSG91 is only used as the delivery pipe.
+        counts attempts — passing `otp=otp_code` here makes MSG91 send
+        *our* code instead of generating its own, so MSG91 stays purely the
+        delivery pipe.
 
         Required settings: MSG91_AUTH_KEY, MSG91_TEMPLATE_ID
-        Optional settings: MSG91_SENDER_ID, MSG91_OTP_VAR (default "OTP")
         """
         try:
             import requests
@@ -59,43 +62,28 @@ class SMSService:
 
         # MSG91 expects the number with country code and no leading '+' or spaces.
         clean_mobile = mobile_number.lstrip("+").replace(" ", "")
-        otp_var = getattr(settings, "MSG91_OTP_VAR", "OTP")
 
-        payload = {
+        params = {
             "template_id": template_id,
-            "short_url": "0",
-            "recipients": [
-                {
-                    "mobiles": clean_mobile,
-                    otp_var: otp_code,
-                }
-            ],
-        }
-
-        sender_id = getattr(settings, "MSG91_SENDER_ID", "")
-        if sender_id:
-            payload["sender"] = sender_id
-
-        headers = {
+            "mobile": clean_mobile,
             "authkey": auth_key,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
+            "otp": otp_code,
         }
 
         try:
             response = requests.post(
-                "https://control.msg91.com/api/v5/flow",
-                json=payload,
-                headers=headers,
+                "https://control.msg91.com/api/v5/otp",
+                params=params,
+                headers={"accept": "application/json"},
                 timeout=10,
             )
         except requests.RequestException:
-            logger.exception("MSG91 SMS request failed for %s", mobile_number)
+            logger.exception("MSG91 OTP request failed for %s", mobile_number)
             return False
 
         if response.status_code != 200:
             logger.error(
-                "MSG91 SMS send failed for %s: HTTP %s - %s",
+                "MSG91 OTP send failed for %s: HTTP %s - %s",
                 mobile_number, response.status_code, response.text,
             )
             return False
@@ -107,7 +95,7 @@ class SMSService:
             return False
 
         if data.get("type") != "success":
-            logger.error("MSG91 SMS send failed for %s: %s", mobile_number, data)
+            logger.error("MSG91 OTP send failed for %s: %s", mobile_number, data)
             return False
 
         return True

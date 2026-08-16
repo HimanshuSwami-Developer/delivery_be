@@ -261,14 +261,13 @@ MASTER_OTP_MOBILE_NUMBERS = [
 # Switch to "twilio" (or add your own provider in accounts/sms_service.py)
 # and set the corresponding credentials for production.
 SMS_BACKEND = os.environ.get("SMS_BACKEND", "console")
-# MSG91 (used when SMS_BACKEND="msg91")
-# MSG91_TEMPLATE_ID is the Flow/Template ID of a DLT-approved OTP template
-# you create in the MSG91 dashboard, containing a variable (default name
-# "OTP") that this app fills in with the code it generated itself.
+# MSG91 (used when SMS_BACKEND="msg91") — the OTP Widget API, not Flow.
+# MSG91_TEMPLATE_ID is the Widget's Template ID (MSG91 dashboard -> OTP ->
+# Widget), which auto-provisions a DLT-approved OTP template. This app
+# still generates/tracks/verifies the OTP itself and just passes it to
+# MSG91 to deliver.
 MSG91_AUTH_KEY = os.environ.get("MSG91_AUTH_KEY", "")
 MSG91_TEMPLATE_ID = os.environ.get("MSG91_TEMPLATE_ID", "")
-MSG91_SENDER_ID = os.environ.get("MSG91_SENDER_ID", "")
-MSG91_OTP_VAR = os.environ.get("MSG91_OTP_VAR", "OTP")
 
 
 # ---------------------------------------------------------------------------
