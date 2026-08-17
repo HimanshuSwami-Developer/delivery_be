@@ -258,16 +258,19 @@ MASTER_OTP_MOBILE_NUMBERS = [
 # SMS provider configuration
 # ---------------------------------------------------------------------------
 # "console" just prints/logs the OTP — perfect for local development.
-# Switch to "twilio" (or add your own provider in accounts/sms_service.py)
-# and set the corresponding credentials for production.
+# "whatsapp" sends via MSG91's WhatsApp Business API — no DLT needed, but
+# needs a verified WhatsApp Business number + an approved WhatsApp template.
 SMS_BACKEND = os.environ.get("SMS_BACKEND", "console")
-# MSG91 (used when SMS_BACKEND="msg91") — the OTP Widget API, not Flow.
-# MSG91_TEMPLATE_ID is the Widget's Template ID (MSG91 dashboard -> OTP ->
-# Widget), which auto-provisions a DLT-approved OTP template. This app
-# still generates/tracks/verifies the OTP itself and just passes it to
-# MSG91 to deliver.
+
 MSG91_AUTH_KEY = os.environ.get("MSG91_AUTH_KEY", "")
-MSG91_TEMPLATE_ID = os.environ.get("MSG91_TEMPLATE_ID", "")
+
+# MSG91 WhatsApp Business API (used when SMS_BACKEND="whatsapp").
+# MSG91_WHATSAPP_NUMBER is the verified WhatsApp Business number connected
+# in MSG91's dashboard (WhatsApp -> Manage Numbers); MSG91_WHATSAPP_TEMPLATE
+# is the name of an approved "Authentication" category template with one
+# body variable for the code.
+MSG91_WHATSAPP_NUMBER = os.environ.get("MSG91_WHATSAPP_NUMBER", "")
+MSG91_WHATSAPP_TEMPLATE = os.environ.get("MSG91_WHATSAPP_TEMPLATE", "")
 
 
 # ---------------------------------------------------------------------------
