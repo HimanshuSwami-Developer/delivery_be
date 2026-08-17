@@ -51,11 +51,19 @@ class Order(BaseModel):
     # Razorpay checkout tracking — separate from `status` (the delivery
     # lifecycle) since a Cash on Delivery order is legitimately "new" while
     # payment_status stays "pending" for its entire life until delivery.
-    payment_status = models.CharField(max_length=10, choices=PaymentStatus.choices, default=PaymentStatus.PENDING)
-    razorpay_order_id = models.CharField(max_length=64, blank=True)
-    razorpay_payment_id = models.CharField(max_length=64, blank=True)
-    razorpay_signature = models.CharField(max_length=255, blank=True)
-    payment_failure_reason = models.CharField(max_length=255, blank=True)
+    # Explicit `default=""` (rather than relying on CharField's implicit
+    # empty-string default) so Django bakes a real DB-level column default
+    # for these — an app-server version older than this migration (e.g.
+    # mid-deploy) omits these columns from its INSERT entirely, and without
+    # a DB default Postgres fills that gap with NULL, which the NOT NULL
+    # constraint then rejects.
+    payment_status = models.CharField(
+        max_length=10, choices=PaymentStatus.choices, default=PaymentStatus.PENDING,
+    )
+    razorpay_order_id = models.CharField(max_length=64, blank=True, default="")
+    razorpay_payment_id = models.CharField(max_length=64, blank=True, default="")
+    razorpay_signature = models.CharField(max_length=255, blank=True, default="")
+    payment_failure_reason = models.CharField(max_length=255, blank=True, default="")
 
     # Address snapshot — addresses live as JSON on accounts.Profile (not a
     # table), and an order must keep the address it was placed against even
