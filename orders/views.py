@@ -1,3 +1,4 @@
+from django.conf import settings
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
@@ -6,14 +7,17 @@ from rest_framework.response import Response
 
 from accounts.models import User
 from core.permissions import IsAdminRole
+from core.service import razorpay_service
 
 from .models import Order
 from .serializers import (
     AssignDeliveryPartnerSerializer,
     OrderDetailSerializer,
     OrderListSerializer,
+    PaymentFailedSerializer,
     PlaceOrderSerializer,
     SetOrderStatusSerializer,
+    VerifyPaymentSerializer,
 )
 
 
@@ -47,16 +51,40 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
             return SetOrderStatusSerializer
         if self.action == "assign_partner":
             return AssignDeliveryPartnerSerializer
+        if self.action == "verify_payment":
+            return VerifyPaymentSerializer
+        if self.action == "payment_failed":
+            return PaymentFailedSerializer
         return OrderListSerializer
 
-    @extend_schema(summary="Place an order from my current cart", responses={201: OrderDetailSerializer})
+    @extend_schema(
+        summary="Place an order from my current cart",
+        description=(
+            "Creates the order from the cart. For non-COD payment modes, also creates a Razorpay "
+            "order and includes `razorpay_key_id`/`razorpay_amount`/`razorpay_currency` alongside "
+            "the order fields so the client can open Razorpay checkout — absent when payment_mode "
+            "is COD, or when Razorpay isn't configured/reachable (the order is still placed either way)."
+        ),
+        responses={201: OrderDetailSerializer},
+    )
     @action(detail=False, methods=["post"])
     def place(self, request):
         serializer = self.get_serializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
         order.send_placed_push()
-        return Response(OrderDetailSerializer(order).data, status=status.HTTP_201_CREATED)
+
+        data = OrderDetailSerializer(order).data
+        if order.payment_mode != Order.PaymentMode.COD:
+            razorpay_order = razorpay_service.create_order(order.total, receipt=order.order_number)
+            if razorpay_order:
+                order.razorpay_order_id = razorpay_order["id"]
+                order.save(update_fields=["razorpay_order_id", "updated_at"])
+                data["razorpay_order_id"] = razorpay_order["id"]
+                data["razorpay_key_id"] = settings.RAZORPAY_KEY_ID
+                data["razorpay_amount"] = razorpay_order["amount"]
+                data["razorpay_currency"] = razorpay_order["currency"]
+        return Response(data, status=status.HTTP_201_CREATED)
 
     @extend_schema(summary="Cancel my order (only while New/Packed)", responses={200: OrderDetailSerializer})
     @action(detail=True, methods=["post"])
@@ -68,6 +96,54 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         order.set_status(Order.Status.CANCELLED)
+        return Response(OrderDetailSerializer(order).data)
+
+    @extend_schema(
+        summary="Verify a completed Razorpay checkout for my order",
+        responses={200: OrderDetailSerializer},
+    )
+    @action(detail=True, methods=["post"])
+    def verify_payment(self, request, pk=None):
+        order = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        if payload["razorpay_order_id"] != order.razorpay_order_id:
+            return Response({"detail": "This payment does not belong to this order."}, status=status.HTTP_400_BAD_REQUEST)
+
+        verified = razorpay_service.verify_signature(
+            {
+                "razorpay_order_id": payload["razorpay_order_id"],
+                "razorpay_payment_id": payload["razorpay_payment_id"],
+                "razorpay_signature": payload["razorpay_signature"],
+            }
+        )
+        if not verified:
+            return Response({"detail": "Payment verification failed."}, status=status.HTTP_400_BAD_REQUEST)
+
+        order.payment_status = Order.PaymentStatus.PAID
+        order.razorpay_payment_id = payload["razorpay_payment_id"]
+        order.razorpay_signature = payload["razorpay_signature"]
+        order.save(update_fields=["payment_status", "razorpay_payment_id", "razorpay_signature", "updated_at"])
+        return Response(OrderDetailSerializer(order).data)
+
+    @extend_schema(
+        summary="Report a failed/cancelled Razorpay checkout for my order",
+        responses={200: OrderDetailSerializer},
+    )
+    @action(detail=True, methods=["post"])
+    def payment_failed(self, request, pk=None):
+        order = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        order.payment_status = Order.PaymentStatus.FAILED
+        order.payment_failure_reason = payload.get("reason", "")[:255]
+        if payload.get("razorpay_payment_id"):
+            order.razorpay_payment_id = payload["razorpay_payment_id"]
+        order.save(update_fields=["payment_status", "payment_failure_reason", "razorpay_payment_id", "updated_at"])
         return Response(OrderDetailSerializer(order).data)
 
     @extend_schema(summary="[Admin] Update order status", responses={200: OrderDetailSerializer})

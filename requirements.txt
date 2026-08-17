@@ -11,5 +11,6 @@ psycopg2-binary
 dj-database-url
 cloudinary
 firebase-admin
+razorpay
 # Uncomment if you switch SMS_BACKEND to "twilio" in settings.py
 # twilio==9.*

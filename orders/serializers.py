@@ -28,7 +28,7 @@ class OrderListSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             "id", "order_number", "customer", "customer_name", "customer_mobile", "zone", "zone_name",
-            "delivery_partner", "delivery_partner_name", "status", "payment_mode", "item_count",
+            "delivery_partner", "delivery_partner_name", "status", "payment_mode", "payment_status", "item_count",
             "subtotal", "discount", "cgst", "sgst", "delivery_fee", "total", "address", "created_at",
         ]
 
@@ -43,7 +43,7 @@ class OrderDetailSerializer(OrderListSerializer):
     class Meta(OrderListSerializer.Meta):
         fields = OrderListSerializer.Meta.fields + [
             "items", "coupon", "coupon_code", "gstin", "address_line1", "address_line2", "city", "state",
-            "pincode", "delivery_slot_date", "delivery_slot_label",
+            "pincode", "delivery_slot_date", "delivery_slot_label", "razorpay_order_id",
             "packed_at", "out_for_delivery_at", "delivered_at", "cancelled_at",
         ]
 
@@ -129,6 +129,25 @@ class PlaceOrderSerializer(serializers.Serializer):
             cart.coupon = None
             cart.save(update_fields=["coupon", "updated_at"])
         return order
+
+
+class VerifyPaymentSerializer(serializers.Serializer):
+    """Posted once Razorpay's checkout popup calls back with a successful
+    payment — verified server-side against RAZORPAY_KEY_SECRET before the
+    order is ever marked paid (never trust the client's word alone)."""
+
+    razorpay_order_id = serializers.CharField()
+    razorpay_payment_id = serializers.CharField()
+    razorpay_signature = serializers.CharField()
+
+
+class PaymentFailedSerializer(serializers.Serializer):
+    """Best-effort client telemetry for a failed/cancelled Razorpay
+    checkout — every field optional since this must never itself fail to
+    validate (the client is already in an error state when it posts here)."""
+
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+    razorpay_payment_id = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class SetOrderStatusSerializer(serializers.Serializer):

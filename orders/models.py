@@ -30,6 +30,11 @@ class Order(BaseModel):
         CARD = "card", "Card"
         WALLET = "wallet", "Wallet"
 
+    class PaymentStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PAID = "paid", "Paid"
+        FAILED = "failed", "Failed"
+
     order_number = models.CharField(max_length=20, unique=True, default=generate_order_number, editable=False)
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="orders")
     zone = models.ForeignKey("zones.Zone", on_delete=models.PROTECT, related_name="orders")
@@ -42,6 +47,15 @@ class Order(BaseModel):
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
     payment_mode = models.CharField(max_length=10, choices=PaymentMode.choices, default=PaymentMode.UPI)
+
+    # Razorpay checkout tracking — separate from `status` (the delivery
+    # lifecycle) since a Cash on Delivery order is legitimately "new" while
+    # payment_status stays "pending" for its entire life until delivery.
+    payment_status = models.CharField(max_length=10, choices=PaymentStatus.choices, default=PaymentStatus.PENDING)
+    razorpay_order_id = models.CharField(max_length=64, blank=True)
+    razorpay_payment_id = models.CharField(max_length=64, blank=True)
+    razorpay_signature = models.CharField(max_length=255, blank=True)
+    payment_failure_reason = models.CharField(max_length=255, blank=True)
 
     # Address snapshot — addresses live as JSON on accounts.Profile (not a
     # table), and an order must keep the address it was placed against even
