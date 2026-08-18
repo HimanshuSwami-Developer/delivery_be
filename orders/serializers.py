@@ -77,11 +77,16 @@ class PlaceOrderSerializer(serializers.Serializer):
                 )
             if not addr:
                 raise serializers.ValidationError({"address_id": "Address not found."})
-            attrs["address_line1"] = addr.get("address_line1", "")
-            attrs["address_line2"] = addr.get("address_line2", "")
-            attrs["city"] = addr.get("city", "")
-            attrs["state"] = addr.get("state", "")
-            attrs["pincode"] = addr.get("pincode", "")
+            # `.get(key, "")` only falls back when the key is *missing* — these
+            # come from the profile's stored address JSON, where an optional
+            # field like address_line2 (landmark) is often present but `None`
+            # rather than absent, so that still leaves `None` here without the
+            # explicit `or ""`.
+            attrs["address_line1"] = addr.get("address_line1") or ""
+            attrs["address_line2"] = addr.get("address_line2") or ""
+            attrs["city"] = addr.get("city") or ""
+            attrs["state"] = addr.get("state") or ""
+            attrs["pincode"] = addr.get("pincode") or ""
         elif not attrs.get("address_line1"):
             raise serializers.ValidationError("Provide either address_id, or address_line1/city/state/pincode.")
         return attrs
