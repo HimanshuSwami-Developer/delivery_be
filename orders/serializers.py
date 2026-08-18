@@ -113,11 +113,15 @@ class PlaceOrderSerializer(serializers.Serializer):
                 customer=request.user,
                 zone=validated_data["zone"],
                 payment_mode=validated_data["payment_mode"],
-                address_line1=validated_data.get("address_line1", ""),
-                address_line2=validated_data.get("address_line2", ""),
-                city=validated_data.get("city", ""),
-                state=validated_data.get("state", ""),
-                pincode=validated_data.get("pincode", ""),
+                # `or ""` (not just `.get(key, "")`) so this stays safe even if
+                # a future caller passes an explicit `None` for one of these —
+                # matches the same guard in `validate()`, kept here too since
+                # this is the actual point these hit a NOT NULL column.
+                address_line1=validated_data.get("address_line1") or "",
+                address_line2=validated_data.get("address_line2") or "",
+                city=validated_data.get("city") or "",
+                state=validated_data.get("state") or "",
+                pincode=validated_data.get("pincode") or "",
                 gstin=validated_data.get("gstin", ""),
                 delivery_slot_date=validated_data.get("delivery_slot_date"),
                 delivery_slot_label=validated_data.get("delivery_slot_label", ""),
