@@ -272,6 +272,28 @@ MSG91_AUTH_KEY = os.environ.get("MSG91_AUTH_KEY", "")
 MSG91_WHATSAPP_NUMBER = os.environ.get("MSG91_WHATSAPP_NUMBER", "")
 MSG91_WHATSAPP_TEMPLATE = os.environ.get("MSG91_WHATSAPP_TEMPLATE", "")
 
+# A second, separate MSG91 template used only for the order-invoice
+# notification (orders/models.py Order.send_whatsapp_invoice) — needs its
+# own Meta approval since it's a different template with different content,
+# one body variable holding the whole pre-formatted invoice text. Sent to
+# ORDER_NOTIFY_WHATSAPP_NUMBER (digits with country code, no '+') every time
+# an order is placed, regardless of payment method/status.
+MSG91_WHATSAPP_ORDER_TEMPLATE = os.environ.get("MSG91_WHATSAPP_ORDER_TEMPLATE", "")
+ORDER_NOTIFY_WHATSAPP_NUMBER = os.environ.get("ORDER_NOTIFY_WHATSAPP_NUMBER", "919718751020")
+
+
+# ---------------------------------------------------------------------------
+# Groq (vision OCR for QR payment screenshots)
+# ---------------------------------------------------------------------------
+# Used by core/service/groq_service.py — reads a QR checkout's uploaded
+# payment screenshot and extracts the transaction ID + paid amount, which
+# orders/serializers.py._verify_qr_payment uses to auto-approve the order
+# when the amount matches. Get a key from console.groq.com. Left blank,
+# QR orders still place fine — payment_status just stays 'pending' for an
+# admin to verify by hand instead of getting auto-approved.
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_VISION_MODEL = os.environ.get("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+
 
 # ---------------------------------------------------------------------------
 # Push notifications (Firebase Cloud Messaging)

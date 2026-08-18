@@ -54,13 +54,18 @@ class Order(BaseModel):
     # Separate from `status` (the delivery lifecycle) since a Cash on
     # Delivery or QR order is legitimately "new" while payment_status stays
     # "pending" for a while — QR payments are UPI-app-to-UPI-app with no
-    # gateway callback, so there's nothing to auto-verify: the customer
-    # attaches `payment_screenshot_url` as proof and an admin reviews it,
-    # flipping payment_status to paid/failed by hand from the order admin.
+    # gateway callback. `PlaceOrderSerializer._verify_qr_payment` reads the
+    # uploaded screenshot via Groq and auto-flips this to PAID when it finds
+    # both a transaction ID and a matching amount; anything less certain
+    # (Groq not configured, an unreadable screenshot, an amount mismatch)
+    # leaves it here for an admin to verify by hand from the order admin.
     payment_status = models.CharField(
         max_length=10, choices=PaymentStatus.choices, default=PaymentStatus.PENDING,
     )
     payment_screenshot_url = models.URLField(max_length=500, blank=True, default="")
+    # UPI transaction ID / UTR read off the screenshot by Groq (or entered
+    # by an admin) — empty until then.
+    payment_transaction_id = models.CharField(max_length=64, blank=True, default="")
 
     # Address snapshot — addresses live as JSON on accounts.Profile (not a
     # table), and an order must keep the address it was placed against even
@@ -148,6 +153,40 @@ class Order(BaseModel):
         the "order successful" (placed) notification, distinct from the
         later "delivered" one `set_status` sends."""
         self._send_push("Order placed", "Your order {order_number} has been placed successfully.")
+
+    def send_whatsapp_invoice(self):
+        """Called once, right after `OrderViewSet.place` creates the order —
+        notifies the business's own WhatsApp (settings.ORDER_NOTIFY_WHATSAPP_NUMBER)
+        with the full invoice, so every order (QR or COD) gets flagged there
+        immediately regardless of payment_status. Best-effort: `SMSService`
+        never raises, so a misconfigured/unreachable WhatsApp send can't fail
+        order placement itself."""
+        from core.service.sms_service import SMSService
+
+        SMSService.send_order_invoice_whatsapp(self._invoice_text())
+
+    def _invoice_text(self):
+        lines = [
+            f"New order {self.order_number}",
+            f"{self.customer.name or 'Customer'} · {self.customer.mobile_number}",
+            "",
+        ]
+        for item in self.items.all():
+            lines.append(f"{item.product_name} x{item.qty} = Rs {item.amount}")
+        lines.append("")
+        if self.discount:
+            lines.append(f"Subtotal: Rs {self.subtotal}  Discount: -Rs {self.discount}")
+        else:
+            lines.append(f"Subtotal: Rs {self.subtotal}")
+        lines.append(f"GST: Rs {self.cgst + self.sgst}  Delivery: Rs {self.delivery_fee}")
+        lines.append(f"Total: Rs {self.total}")
+        lines.append("")
+        payment_line = f"Payment: {self.get_payment_mode_display()} ({self.get_payment_status_display()})"
+        if self.payment_transaction_id:
+            payment_line += f" · Txn {self.payment_transaction_id}"
+        lines.append(payment_line)
+        lines.append(f"Deliver to: {self.address_line1}, {self.address_line2}, {self.city}, {self.state} {self.pincode}".replace(", ,", ","))
+        return "\n".join(lines)
 
     def _send_push(self, title, body_template):
         if not title:

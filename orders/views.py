@@ -54,9 +54,11 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         description=(
             "Creates the order from the cart. `payment_mode=cod` places it outright; "
             "`payment_mode=qr` expects a `payment_screenshot` (multipart image) proving the "
-            "customer already paid the UPI QR shown client-side — it's uploaded to Cloudinary and "
-            "stored as `payment_screenshot_url`, with `payment_status` left 'pending' for an admin "
-            "to verify by hand."
+            "customer already paid the UPI QR shown client-side — it's uploaded to Cloudinary "
+            "(`payment_screenshot_url`) and read via Groq OCR, which auto-sets `payment_status='paid'` "
+            "and `payment_transaction_id` when it finds a transaction ID and a matching amount, "
+            "otherwise leaves it 'pending' for an admin to verify by hand. Either way, a WhatsApp "
+            "invoice notification fires to the configured business number."
         ),
         responses={201: OrderDetailSerializer},
     )
@@ -66,6 +68,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
         order.send_placed_push()
+        order.send_whatsapp_invoice()
         return Response(OrderDetailSerializer(order).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(summary="Cancel my order (only while New/Packed)", responses={200: OrderDetailSerializer})

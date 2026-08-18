@@ -12,9 +12,12 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ["order_number", "customer", "zone", "status", "payment_mode", "payment_status", "total", "created_at"]
+    list_display = [
+        "order_number", "customer", "zone", "status", "payment_mode", "payment_status",
+        "payment_transaction_id", "total", "created_at",
+    ]
     list_filter = ["status", "payment_mode", "payment_status", "zone"]
-    search_fields = ["order_number", "customer__mobile_number"]
+    search_fields = ["order_number", "customer__mobile_number", "payment_transaction_id"]
     readonly_fields = [
         "order_number", "subtotal", "discount", "cgst", "sgst", "total", "payment_screenshot_preview",
     ]

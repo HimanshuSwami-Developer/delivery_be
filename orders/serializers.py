@@ -2,6 +2,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from core.helper.cloudinary_service import upload_image as cloudinary_upload_image
+from core.service import groq_service
 from delivery.models import DeliveryPartner
 from zones.models import Zone
 
@@ -45,7 +46,7 @@ class OrderDetailSerializer(OrderListSerializer):
         fields = OrderListSerializer.Meta.fields + [
             "items", "coupon", "coupon_code", "gstin", "address_line1", "address_line2", "city", "state",
             "pincode", "delivery_slot_date", "delivery_slot_label", "payment_screenshot_url",
-            "packed_at", "out_for_delivery_at", "delivered_at", "cancelled_at",
+            "payment_transaction_id", "packed_at", "out_for_delivery_at", "delivered_at", "cancelled_at",
         ]
 
 
@@ -146,7 +147,38 @@ class PlaceOrderSerializer(serializers.Serializer):
             cart.items.all().delete()
             cart.coupon = None
             cart.save(update_fields=["coupon", "updated_at"])
+
+        if screenshot_url:
+            self._verify_qr_payment(order, screenshot_url)
         return order
+
+    def _verify_qr_payment(self, order, screenshot_url):
+        """Best-effort, run after the order (and its `total`) already exist:
+        reads the uploaded screenshot via Groq and auto-marks the order paid
+        only when both a transaction ID and a matching amount come back.
+        Anything short of that — Groq not configured, an unreadable
+        screenshot, an amount mismatch — leaves `payment_status` at its
+        default 'pending' for an admin to verify by hand instead of
+        auto-approving on a guess. Runs outside the placement transaction
+        since it's a network call, not something that should hold a DB
+        transaction open or roll back order placement if it fails.
+        """
+        details = groq_service.extract_payment_details(screenshot_url)
+        if not details:
+            return
+
+        update_fields = []
+        if details["transaction_id"]:
+            order.payment_transaction_id = details["transaction_id"][:64]
+            update_fields.append("payment_transaction_id")
+
+        amount = details["amount"]
+        if details["success"] and amount is not None and abs(amount - order.total) <= 1:
+            order.payment_status = Order.PaymentStatus.PAID
+            update_fields.append("payment_status")
+
+        if update_fields:
+            order.save(update_fields=[*update_fields, "updated_at"])
 
 
 class SetOrderStatusSerializer(serializers.Serializer):
