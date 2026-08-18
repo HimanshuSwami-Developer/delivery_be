@@ -26,6 +26,9 @@ class Order(BaseModel):
 
     class PaymentMode(models.TextChoices):
         COD = "cod", "COD"
+        QR = "qr", "QR"
+        # Legacy modes from the old Razorpay gateway checkout — kept only so
+        # historical orders placed under them still display correctly.
         UPI = "upi", "UPI"
         CARD = "card", "Card"
         WALLET = "wallet", "Wallet"
@@ -46,24 +49,18 @@ class Order(BaseModel):
     )
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
-    payment_mode = models.CharField(max_length=10, choices=PaymentMode.choices, default=PaymentMode.UPI)
+    payment_mode = models.CharField(max_length=10, choices=PaymentMode.choices, default=PaymentMode.QR)
 
-    # Razorpay checkout tracking — separate from `status` (the delivery
-    # lifecycle) since a Cash on Delivery order is legitimately "new" while
-    # payment_status stays "pending" for its entire life until delivery.
-    # Explicit `default=""` (rather than relying on CharField's implicit
-    # empty-string default) so Django bakes a real DB-level column default
-    # for these — an app-server version older than this migration (e.g.
-    # mid-deploy) omits these columns from its INSERT entirely, and without
-    # a DB default Postgres fills that gap with NULL, which the NOT NULL
-    # constraint then rejects.
+    # Separate from `status` (the delivery lifecycle) since a Cash on
+    # Delivery or QR order is legitimately "new" while payment_status stays
+    # "pending" for a while — QR payments are UPI-app-to-UPI-app with no
+    # gateway callback, so there's nothing to auto-verify: the customer
+    # attaches `payment_screenshot_url` as proof and an admin reviews it,
+    # flipping payment_status to paid/failed by hand from the order admin.
     payment_status = models.CharField(
         max_length=10, choices=PaymentStatus.choices, default=PaymentStatus.PENDING,
     )
-    razorpay_order_id = models.CharField(max_length=64, blank=True, default="")
-    razorpay_payment_id = models.CharField(max_length=64, blank=True, default="")
-    razorpay_signature = models.CharField(max_length=255, blank=True, default="")
-    payment_failure_reason = models.CharField(max_length=255, blank=True, default="")
+    payment_screenshot_url = models.URLField(max_length=500, blank=True, default="")
 
     # Address snapshot — addresses live as JSON on accounts.Profile (not a
     # table), and an order must keep the address it was placed against even

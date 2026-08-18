@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils.html import format_html
 
 from .models import Order, OrderItem
 
@@ -15,7 +16,14 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ["status", "payment_mode", "payment_status", "zone"]
     search_fields = ["order_number", "customer__mobile_number"]
     readonly_fields = [
-        "order_number", "subtotal", "discount", "cgst", "sgst", "total",
-        "razorpay_order_id", "razorpay_payment_id", "razorpay_signature",
+        "order_number", "subtotal", "discount", "cgst", "sgst", "total", "payment_screenshot_preview",
     ]
     inlines = [OrderItemInline]
+
+    @admin.display(description="Payment screenshot")
+    def payment_screenshot_preview(self, obj):
+        if not obj.payment_screenshot_url:
+            return "—"
+        return format_html(
+            '<a href="{0}" target="_blank"><img src="{0}" style="max-height:200px;"></a>', obj.payment_screenshot_url
+        )

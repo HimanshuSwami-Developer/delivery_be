@@ -307,15 +307,3 @@ cloudinary.config(
     api_secret=CLOUDINARY_API_SECRET,
     secure=True,
 )
-
-
-# ---------------------------------------------------------------------------
-# Razorpay (online payments for orders — UPI/Card/Wallet checkout)
-# ---------------------------------------------------------------------------
-# Used by core/service/razorpay_service.py. Get these from the Razorpay
-# dashboard -> Settings -> API Keys (use the rzp_test_... pair for dev).
-# Left blank, online payments are skipped entirely — orders/views.py falls
-# back to placing the order without a gateway step (Cash on Delivery keeps
-# working either way, it never touches Razorpay).
-RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
-RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")

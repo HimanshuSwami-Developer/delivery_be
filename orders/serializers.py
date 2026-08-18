@@ -1,6 +1,7 @@
 from django.db import transaction
 from rest_framework import serializers
 
+from core.helper.cloudinary_service import upload_image as cloudinary_upload_image
 from delivery.models import DeliveryPartner
 from zones.models import Zone
 
@@ -43,7 +44,7 @@ class OrderDetailSerializer(OrderListSerializer):
     class Meta(OrderListSerializer.Meta):
         fields = OrderListSerializer.Meta.fields + [
             "items", "coupon", "coupon_code", "gstin", "address_line1", "address_line2", "city", "state",
-            "pincode", "delivery_slot_date", "delivery_slot_label", "razorpay_order_id",
+            "pincode", "delivery_slot_date", "delivery_slot_label", "payment_screenshot_url",
             "packed_at", "out_for_delivery_at", "delivered_at", "cancelled_at",
         ]
 
@@ -60,10 +61,14 @@ class PlaceOrderSerializer(serializers.Serializer):
     state = serializers.CharField(required=False, allow_blank=True)
     pincode = serializers.CharField(required=False, allow_blank=True)
     zone = serializers.PrimaryKeyRelatedField(queryset=Zone.objects.filter(is_open=True))
-    payment_mode = serializers.ChoiceField(choices=Order.PaymentMode.choices, default=Order.PaymentMode.UPI)
+    payment_mode = serializers.ChoiceField(choices=Order.PaymentMode.choices, default=Order.PaymentMode.QR)
     delivery_slot_date = serializers.DateField(required=False, allow_null=True)
     delivery_slot_label = serializers.CharField(required=False, allow_blank=True)
     gstin = serializers.CharField(required=False, allow_blank=True)
+    # QR checkout only: a screenshot of the completed UPI payment, uploaded
+    # to Cloudinary and stored as proof for admin review — see
+    # `Order.payment_screenshot_url`. Absent for COD.
+    payment_screenshot = serializers.ImageField(required=False, allow_null=True)
 
     def validate(self, attrs):
         request = self.context["request"]
@@ -100,6 +105,9 @@ class PlaceOrderSerializer(serializers.Serializer):
         if not cart_items:
             raise serializers.ValidationError("Your cart is empty.")
 
+        screenshot = validated_data.get("payment_screenshot")
+        screenshot_url = cloudinary_upload_image(screenshot, folder="payment_screenshots") if screenshot else ""
+
         with transaction.atomic():
             order = Order.objects.create(
                 customer=request.user,
@@ -113,6 +121,7 @@ class PlaceOrderSerializer(serializers.Serializer):
                 gstin=validated_data.get("gstin", ""),
                 delivery_slot_date=validated_data.get("delivery_slot_date"),
                 delivery_slot_label=validated_data.get("delivery_slot_label", ""),
+                payment_screenshot_url=screenshot_url,
                 coupon=cart.coupon,
             )
             OrderItem.objects.bulk_create(
@@ -134,25 +143,6 @@ class PlaceOrderSerializer(serializers.Serializer):
             cart.coupon = None
             cart.save(update_fields=["coupon", "updated_at"])
         return order
-
-
-class VerifyPaymentSerializer(serializers.Serializer):
-    """Posted once Razorpay's checkout popup calls back with a successful
-    payment — verified server-side against RAZORPAY_KEY_SECRET before the
-    order is ever marked paid (never trust the client's word alone)."""
-
-    razorpay_order_id = serializers.CharField()
-    razorpay_payment_id = serializers.CharField()
-    razorpay_signature = serializers.CharField()
-
-
-class PaymentFailedSerializer(serializers.Serializer):
-    """Best-effort client telemetry for a failed/cancelled Razorpay
-    checkout — every field optional since this must never itself fail to
-    validate (the client is already in an error state when it posts here)."""
-
-    reason = serializers.CharField(required=False, allow_blank=True, default="")
-    razorpay_payment_id = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class SetOrderStatusSerializer(serializers.Serializer):
