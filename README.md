@@ -49,13 +49,12 @@ external SMS account is required to try the project out.
 
 ## Switching to a real SMS provider
 
-Open `core/service/sms_service.py`. A Twilio implementation is included as an
-example — set `SMS_BACKEND=twilio` and fill in `TWILIO_ACCOUNT_SID`,
-`TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (env vars or directly in
-`core/settings.py`), then `pip install twilio`.
+Set `SMS_BACKEND=fast2sms` and fill in `FAST2SMS_API_KEY` (env var or
+directly in `core/settings.py`) — sends plain SMS via Fast2SMS's Quick SMS
+route. See `core/service/sms_service.py` for the implementation.
 
-To use a different provider (MSG91, Fast2SMS, AWS SNS, TextLocal, etc.),
-add another `_send_via_xxx` method to `SMSService` and branch on it in
+To use a different provider (AWS SNS, TextLocal, Twilio, etc.), add
+another `_send_via_xxx` method to `SMSService` and branch on it in
 `send_otp_sms`. Every view calls `SMSService.send_otp_sms(mobile, otp)` —
 nothing else in the code needs to change.
 

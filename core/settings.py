@@ -258,28 +258,17 @@ MASTER_OTP_MOBILE_NUMBERS = [
 # SMS provider configuration
 # ---------------------------------------------------------------------------
 # "console" just prints/logs the OTP — perfect for local development.
-# "whatsapp" sends via MSG91's WhatsApp Business API — no DLT needed, but
-# needs a verified WhatsApp Business number + an approved WhatsApp template.
+# "fast2sms" sends a plain SMS via Fast2SMS's Quick SMS route.
 SMS_BACKEND = os.environ.get("SMS_BACKEND", "console")
 
-MSG91_AUTH_KEY = os.environ.get("MSG91_AUTH_KEY", "")
+# Fast2SMS (used when SMS_BACKEND="fast2sms"). Get the key from
+# fast2sms.com dashboard -> Dev API -> API Keys.
+FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
 
-# MSG91 WhatsApp Business API (used when SMS_BACKEND="whatsapp").
-# MSG91_WHATSAPP_NUMBER is the verified WhatsApp Business number connected
-# in MSG91's dashboard (WhatsApp -> Manage Numbers); MSG91_WHATSAPP_TEMPLATE
-# is the name of an approved "Authentication" category template with one
-# body variable for the code.
-MSG91_WHATSAPP_NUMBER = os.environ.get("MSG91_WHATSAPP_NUMBER", "")
-MSG91_WHATSAPP_TEMPLATE = os.environ.get("MSG91_WHATSAPP_TEMPLATE", "")
-
-# A second, separate MSG91 template used only for the order-invoice
-# notification (orders/models.py Order.send_whatsapp_invoice) — needs its
-# own Meta approval since it's a different template with different content,
-# one body variable holding the whole pre-formatted invoice text. Sent to
-# ORDER_NOTIFY_WHATSAPP_NUMBER (digits with country code, no '+') every time
-# an order is placed, regardless of payment method/status.
-MSG91_WHATSAPP_ORDER_TEMPLATE = os.environ.get("MSG91_WHATSAPP_ORDER_TEMPLATE", "")
-ORDER_NOTIFY_WHATSAPP_NUMBER = os.environ.get("ORDER_NOTIFY_WHATSAPP_NUMBER", "919718751020")
+# Who receives the order-invoice SMS (orders/models.py
+# Order.send_order_invoice_sms) — digits with country code, no '+'. Sent
+# every time an order is placed, regardless of payment method/status.
+ORDER_NOTIFY_MOBILE_NUMBER = os.environ.get("ORDER_NOTIFY_MOBILE_NUMBER", "919718751020")
 
 
 # ---------------------------------------------------------------------------

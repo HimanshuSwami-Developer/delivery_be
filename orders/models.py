@@ -154,16 +154,16 @@ class Order(BaseModel):
         later "delivered" one `set_status` sends."""
         self._send_push("Order placed", "Your order {order_number} has been placed successfully.")
 
-    def send_whatsapp_invoice(self):
+    def send_order_invoice_sms(self):
         """Called once, right after `OrderViewSet.place` creates the order —
-        notifies the business's own WhatsApp (settings.ORDER_NOTIFY_WHATSAPP_NUMBER)
+        notifies the business's own mobile (settings.ORDER_NOTIFY_MOBILE_NUMBER)
         with the full invoice, so every order (QR or COD) gets flagged there
         immediately regardless of payment_status. Best-effort: `SMSService`
-        never raises, so a misconfigured/unreachable WhatsApp send can't fail
-        order placement itself."""
+        never raises, so a misconfigured/unreachable send can't fail order
+        placement itself."""
         from core.service.sms_service import SMSService
 
-        SMSService.send_order_invoice_whatsapp(self._invoice_text())
+        SMSService.send_order_invoice_sms(self._invoice_text())
 
     def _invoice_text(self):
         lines = [

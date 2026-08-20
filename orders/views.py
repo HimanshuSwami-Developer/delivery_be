@@ -68,7 +68,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
         order.send_placed_push()
-        order.send_whatsapp_invoice()
+        order.send_order_invoice_sms()
         return Response(OrderDetailSerializer(order).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(summary="Cancel my order (only while New/Packed)", responses={200: OrderDetailSerializer})
