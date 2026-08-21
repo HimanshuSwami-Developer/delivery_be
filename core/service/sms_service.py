@@ -7,16 +7,21 @@ logger = logging.getLogger(__name__)
 
 class SMSService:
     """
-    Sends the OTP (and order-invoice notifications) as plain SMS.
+    Sends the OTP via 2Factor's SMS OTP API, and order-invoice
+    notifications as plain SMS via Fast2SMS.
 
-    settings.SMS_BACKEND controls the implementation:
+    settings.OTP_SMS_BACKEND controls the OTP implementation:
+      - "console"   : just logs/prints the message (local dev, no real send)
+      - "twofactor" : sends via 2Factor's SMS OTP API
+
+    settings.SMS_BACKEND controls the order-invoice implementation:
       - "console"  : just logs/prints the message (local dev, no real send)
       - "fast2sms" : sends via Fast2SMS's Quick SMS route
     """
 
     @staticmethod
     def send_otp_sms(mobile_number: str, otp_code: str) -> bool:
-        backend = getattr(settings, "SMS_BACKEND", "console")
+        backend = getattr(settings, "OTP_SMS_BACKEND", "console")
         message = f"Your OTP is {otp_code}. Valid for {settings.OTP_EXPIRY_MINUTES} minutes."
 
         if backend == "console":
@@ -24,10 +29,10 @@ class SMSService:
             print(f"[SMS -> {mobile_number}]: {message}")
             return True
 
-        if backend == "fast2sms":
-            return SMSService._send_via_fast2sms(mobile_number, message)
+        if backend == "twofactor":
+            return SMSService._send_otp_via_2factor(mobile_number, otp_code)
 
-        logger.error("Unknown SMS_BACKEND '%s'", backend)
+        logger.error("Unknown OTP_SMS_BACKEND '%s'", backend)
         return False
 
     @staticmethod
@@ -54,6 +59,65 @@ class SMSService:
 
         logger.error("Unknown SMS_BACKEND '%s'", backend)
         return False
+
+    @staticmethod
+    def _send_otp_via_2factor(mobile_number: str, otp_code: str) -> bool:
+        """
+        2Factor's SMS OTP API — sends `otp_code` inside 2Factor's own
+        pre-approved OTP template, so unlike a generic transactional SMS
+        route, no DLT template registration is needed on our side.
+
+        Prerequisites (2factor.in dashboard -> API keys):
+          1. Sign up / log in, add balance.
+          2. Copy your API key -> TWO_FACTOR_API_KEY.
+
+        2Factor expects the destination as a 10-digit Indian number, no
+        '+' and no '91' country-code prefix, e.g. "9718751020" not
+        "+919718751020".
+
+        Required settings: TWO_FACTOR_API_KEY
+        """
+        try:
+            import requests
+        except ImportError:
+            logger.error("requests package not installed. Run: pip install requests")
+            return False
+
+        api_key = getattr(settings, "TWO_FACTOR_API_KEY", "")
+        if not api_key:
+            logger.error("TWO_FACTOR_API_KEY not configured.")
+            return False
+
+        clean_mobile = mobile_number.lstrip("+").replace(" ", "")
+        if clean_mobile.startswith("91") and len(clean_mobile) == 12:
+            clean_mobile = clean_mobile[2:]
+
+        url = f"https://2factor.in/API/V1/{api_key}/SMS/{clean_mobile}/{otp_code}"
+
+        try:
+            response = requests.post(url, timeout=10)
+        except requests.RequestException:
+            logger.exception("2Factor request failed for %s", mobile_number)
+            return False
+
+        if response.status_code != 200:
+            logger.error(
+                "2Factor send failed for %s: HTTP %s - %s",
+                mobile_number, response.status_code, response.text,
+            )
+            return False
+
+        try:
+            data = response.json()
+        except ValueError:
+            logger.error("2Factor returned a non-JSON response for %s: %s", mobile_number, response.text)
+            return False
+
+        if data.get("Status") != "Success":
+            logger.error("2Factor send failed for %s: %s", mobile_number, data)
+            return False
+
+        return True
 
     @staticmethod
     def _send_via_fast2sms(mobile_number: str, message: str) -> bool:

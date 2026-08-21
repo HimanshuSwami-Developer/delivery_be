@@ -257,8 +257,17 @@ MASTER_OTP_MOBILE_NUMBERS = [
 # ---------------------------------------------------------------------------
 # SMS provider configuration
 # ---------------------------------------------------------------------------
-# "console" just prints/logs the OTP — perfect for local development.
-# "fast2sms" sends a plain SMS via Fast2SMS's Quick SMS route.
+# OTP delivery. "console" just prints/logs the OTP — perfect for local
+# development. "twofactor" sends via 2Factor's SMS OTP API.
+OTP_SMS_BACKEND = os.environ.get("OTP_SMS_BACKEND", "console")
+
+# 2Factor (used when OTP_SMS_BACKEND="twofactor"). Get the key from the
+# 2factor.in dashboard -> API keys.
+TWO_FACTOR_API_KEY = os.environ.get("TWO_FACTOR_API_KEY", "")
+
+# Order-invoice notification delivery (Order.send_order_invoice_sms).
+# "console" just prints/logs it. "fast2sms" sends a plain SMS via
+# Fast2SMS's Quick SMS route.
 SMS_BACKEND = os.environ.get("SMS_BACKEND", "console")
 
 # Fast2SMS (used when SMS_BACKEND="fast2sms"). Get the key from
