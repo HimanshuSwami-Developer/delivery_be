@@ -284,8 +284,16 @@ class ProfileView(APIView):
     def get(self, request):
         profile = getattr(request.user, "profile", None)
         if not profile:
+            # `role` lives on `User`, not `Profile` — accounts provisioned
+            # directly as delivery partners/admins never go through the
+            # customer profile-completion step, so the client still needs a
+            # way to learn their role while this 404s.
             return Response(
-                {"detail": "Profile not completed yet. Submit a POST to create it."},
+                {
+                    "detail": "Profile not completed yet. Submit a POST to create it.",
+                    "role": request.user.role,
+                    "mobile_number": request.user.mobile_number,
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(ProfileSerializer(profile).data)

@@ -7,7 +7,22 @@ from .models import DeviceToken, Profile
 MOBILE_REGEX = re.compile(r"^\+?[1-9]\d{9,14}$")
 
 
+def normalize_mobile(value):
+    """Canonicalizes to E.164 (`+91XXXXXXXXXX`) for a bare 10-digit Indian
+    number. Without this, the same phone number resolves to two different
+    `User` rows depending on which entry point created it first — e.g. a
+    delivery partner provisioned by an admin with a bare 10-digit number
+    vs. that same person logging in later through the OTP flow, which
+    always sends a `+91`-prefixed number. Every write path that resolves a
+    `User` by `mobile_number` must normalize through this first."""
+    value = value.strip()
+    if not value.startswith("+") and len(value) == 10 and value.isdigit():
+        return f"+91{value}"
+    return value
+
+
 def validate_mobile(value):
+    value = normalize_mobile(value)
     if not MOBILE_REGEX.match(value):
         raise serializers.ValidationError(
             "Enter a valid mobile number in E.164-ish format, e.g. +919876543210."

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from accounts.models import User
+from accounts.serializers import normalize_mobile
 
 from .models import DeliveryPartner
 
@@ -33,6 +34,9 @@ class DeliveryPartnerWriteSerializer(serializers.ModelSerializer):
         model = DeliveryPartner
         fields = ["id", "mobile_number", "partner_code", "name", "vehicle", "zone", "rating", "status", "photo_url"]
         read_only_fields = ["id"]
+
+    def validate_mobile_number(self, value):
+        return normalize_mobile(value)
 
     def create(self, validated_data):
         mobile_number = validated_data.pop("mobile_number")
