@@ -23,6 +23,7 @@ from .serializers import (
     ResendOTPSerializer,
     SendOTPSerializer,
     VerifyOTPSerializer,
+    normalize_mobile,
 )
 from core.permissions import IsAdminRole
 from core.service.sms_service import SMSService
@@ -246,7 +247,11 @@ class MasterOTPLoginView(APIView):
                 {"detail": "Invalid master OTP."}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        allowed_numbers = settings.MASTER_OTP_MOBILE_NUMBERS
+        # `mobile_number` here is already normalized (see `validate_mobile`),
+        # but settings.MASTER_OTP_MOBILE_NUMBERS is a plain env-var list that
+        # may still hold bare 10-digit numbers — normalize both sides so a
+        # config value like "9718751020" still matches "+919718751020".
+        allowed_numbers = {normalize_mobile(n) for n in settings.MASTER_OTP_MOBILE_NUMBERS}
         if allowed_numbers and mobile_number not in allowed_numbers:
             return Response(
                 {"detail": "Master OTP login is not permitted for this number."},
