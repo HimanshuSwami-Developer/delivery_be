@@ -305,9 +305,42 @@ class ProfileView(APIView):
 
         serializer = ProfileWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        profile = serializer.save(user=request.user)
+
+        referral_code = serializer.validated_data.get("referral_code_used", "").strip().upper()
+        referrer = Profile.objects.filter(referral_code=referral_code).first() if referral_code else None
+        if referral_code and not referrer:
+            return Response({"detail": f'"{referral_code}" is not a valid referral code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile = serializer.save(user=request.user, referred_by=referrer)
+        if referrer:
+            self._grant_referral_rewards(new_profile=profile, referrer=referrer)
 
         return Response(ProfileSerializer(profile).data, status=status.HTTP_201_CREATED)
+
+    @staticmethod
+    def _grant_referral_rewards(new_profile, referrer):
+        """One-time personal coupons for both sides of a successful referral
+        — the closest thing this backend has to a wallet/credit ledger (see
+        `promotions.Coupon.assigned_to`). Best-effort: a failure here must
+        never block account creation, since the profile itself already
+        saved successfully by the time this runs."""
+        from promotions.models import Coupon
+
+        try:
+            Coupon.objects.create(
+                code=f"WELCOME{new_profile.user_id}",
+                title="Referral welcome bonus",
+                flat_discount=100,
+                assigned_to=new_profile.user,
+            )
+            Coupon.objects.create(
+                code=f"REFEARN{referrer.user_id}{new_profile.user_id}",
+                title=f"{new_profile.name or 'A friend'} joined with your code",
+                flat_discount=250,
+                assigned_to=referrer.user,
+            )
+        except Exception:
+            pass
 
     @extend_schema(
         tags=["Profile"],

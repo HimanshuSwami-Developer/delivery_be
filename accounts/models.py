@@ -1,4 +1,5 @@
 import random
+import string
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
@@ -126,6 +127,13 @@ class Profile(BaseModel):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile"
     )
     name = models.CharField(max_length=255)
+    email = models.EmailField(blank=True, null=True)
+
+    referral_code = models.CharField(max_length=12, unique=True, editable=False)
+    referred_by = models.ForeignKey(
+        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="referrals",
+        help_text="The profile whose referral code this user signed up with, if any.",
+    )
 
     addresses = models.JSONField(
         default=list,
@@ -152,3 +160,19 @@ class Profile(BaseModel):
 
     def __str__(self):
         return f"{self.name} ({self.user.mobile_number})"
+
+    @staticmethod
+    def _generate_referral_code():
+        """8 chars, uppercase letters + digits — short enough to read out
+        loud/type in by hand, long enough that brute-forcing someone else's
+        code isn't practical."""
+        alphabet = string.ascii_uppercase + string.digits
+        while True:
+            code = "".join(random.choices(alphabet, k=8))
+            if not Profile.objects.filter(referral_code=code).exists():
+                return code
+
+    def save(self, *args, **kwargs):
+        if not self.referral_code:
+            self.referral_code = self._generate_referral_code()
+        super().save(*args, **kwargs)

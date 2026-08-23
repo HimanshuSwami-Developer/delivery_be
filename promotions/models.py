@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import models
 from django.db.models import Sum
 from django.utils import timezone
@@ -18,6 +19,11 @@ class Coupon(BaseModel):
     terms = models.CharField(max_length=255, blank=True)
     zones = models.ManyToManyField("zones.Zone", blank=True, related_name="coupons", help_text="Empty = all zones.")
     is_active = models.BooleanField(default=True)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
+        related_name="personal_coupons",
+        help_text="Set for personal one-time coupons (e.g. referral rewards) — only this user may apply it, and only once.",
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -37,6 +43,8 @@ class Coupon(BaseModel):
         if not self.is_active:
             return False
         if self.valid_until and timezone.localdate() > self.valid_until:
+            return False
+        if self.assigned_to_id and self.used_count >= 1:
             return False
         return True
 

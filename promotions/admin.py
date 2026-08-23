@@ -5,9 +5,9 @@ from .models import Banner, Coupon, Notification
 
 @admin.register(Coupon)
 class CouponAdmin(admin.ModelAdmin):
-    list_display = ["code", "title", "min_order_value", "flat_discount", "percent_discount", "is_active", "valid_until"]
+    list_display = ["code", "title", "min_order_value", "flat_discount", "percent_discount", "assigned_to", "is_active", "valid_until"]
     list_filter = ["is_active"]
-    search_fields = ["code", "title"]
+    search_fields = ["code", "title", "assigned_to__mobile_number"]
 
 
 @admin.register(Banner)

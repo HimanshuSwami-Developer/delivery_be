@@ -91,18 +91,34 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = [
-            "id", "name", "mobile_number", "role", "addresses", "gps_locations",
+            "id", "name", "email", "mobile_number", "role", "referral_code", "addresses", "gps_locations",
             "created_at", "updated_at",
         ]
         read_only_fields = [
-            "id", "mobile_number", "role", "addresses", "gps_locations",
+            "id", "mobile_number", "role", "referral_code", "addresses", "gps_locations",
             "created_at", "updated_at",
         ]
 
 
 class ProfileWriteSerializer(serializers.ModelSerializer):
-    """Write serializer for create (first-time complete profile) / update."""
+    """Write serializer for create (first-time complete profile) / update.
+
+    `referral_code_used` is accepted only on the create (POST) path — see
+    `ProfileView.post` — a friend's code, not a model field on this profile.
+    It's declared here (rather than as a plain read from request.data) so
+    it's validated and documented the same as every other input.
+    """
+
+    referral_code_used = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Profile
-        fields = ["name"]
+        fields = ["name", "email", "referral_code_used"]
+
+    def create(self, validated_data):
+        validated_data.pop("referral_code_used", None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop("referral_code_used", None)
+        return super().update(instance, validated_data)

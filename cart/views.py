@@ -117,6 +117,10 @@ class CartCouponView(APIView):
         coupon = Coupon.objects.filter(code__iexact=code).first()
         if not coupon or not coupon.is_valid_now():
             return Response({"detail": f'"{code}" is not a valid code.'}, status=status.HTTP_400_BAD_REQUEST)
+        if coupon.assigned_to_id and coupon.assigned_to_id != request.user.id:
+            return Response(
+                {"detail": f'"{code}" isn\'t available for your account.'}, status=status.HTTP_403_FORBIDDEN
+            )
 
         subtotal = sum(ci.product.price * ci.qty for ci in cart.items.all())
         if subtotal < coupon.min_order_value:
