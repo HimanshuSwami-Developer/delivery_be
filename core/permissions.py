@@ -36,6 +36,21 @@ class IsAdminRole(BasePermission):
         return _has_role(request, User.Role.ADMIN)
 
 
+class IsAdminOrDeliveryBoyRole(BasePermission):
+    """Allows role='admin' (or superuser) or role='delivery_boy' users.
+
+    Used for `OrderViewSet.set_status`: a delivery_boy may only reach an
+    order object at all via `get_queryset` (scoped to orders assigned to
+    them), so passing this permission plus successfully loading the object
+    already proves it's theirs — no extra object-level check needed here.
+    """
+
+    message = "Only an admin, or the delivery partner assigned to this order, can perform this action."
+
+    def has_permission(self, request, view):
+        return _has_role(request, User.Role.ADMIN) or _has_role(request, User.Role.DELIVERY_BOY)
+
+
 class IsOwnerOrAdmin(BasePermission):
     """Object-level check: the request.user owns the object (via `.user`/`.customer`
     attribute) or is an admin. Pair with `IsAuthenticated` at the view level.

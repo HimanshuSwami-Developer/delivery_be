@@ -75,6 +75,13 @@ class Order(BaseModel):
     city = models.CharField(max_length=100, blank=True)
     state = models.CharField(max_length=100, blank=True)
     pincode = models.CharField(max_length=10, blank=True)
+    # Drop-pin coordinates, snapshotted the same way as the address text
+    # above (from the saved address, if it has one) — the delivery
+    # partner's map view (see `orders.serializers.OrderListSerializer`)
+    # falls back to the address text alone when these are null, which is
+    # always true for orders placed before this field existed.
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
     gstin = models.CharField(max_length=20, blank=True, help_text="Buyer GSTIN for a B2B invoice; blank = B2C.")
 
     delivery_slot_date = models.DateField(null=True, blank=True)

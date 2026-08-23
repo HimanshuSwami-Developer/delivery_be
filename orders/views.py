@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.models import User
-from core.permissions import IsAdminRole
+from core.permissions import IsAdminOrDeliveryBoyRole, IsAdminRole
 
 from .models import Order
 from .serializers import (
@@ -36,6 +36,8 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         if user.is_authenticated and (user.role == User.Role.ADMIN or user.is_superuser):
             return qs
+        if user.is_authenticated and user.role == User.Role.DELIVERY_BOY:
+            return qs.filter(delivery_partner__user=user)
         return qs.filter(customer=user)
 
     def get_serializer_class(self):
@@ -83,8 +85,8 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         order.set_status(Order.Status.CANCELLED)
         return Response(OrderDetailSerializer(order).data)
 
-    @extend_schema(summary="[Admin] Update order status", responses={200: OrderDetailSerializer})
-    @action(detail=True, methods=["patch"], permission_classes=[IsAdminRole])
+    @extend_schema(summary="[Admin/Delivery] Update order status", responses={200: OrderDetailSerializer})
+    @action(detail=True, methods=["patch"], permission_classes=[IsAdminOrDeliveryBoyRole])
     def set_status(self, request, pk=None):
         order = self.get_object()
         serializer = self.get_serializer(data=request.data)

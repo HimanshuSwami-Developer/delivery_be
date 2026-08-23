@@ -31,7 +31,8 @@ class OrderListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "order_number", "customer", "customer_name", "customer_mobile", "zone", "zone_name",
             "delivery_partner", "delivery_partner_name", "status", "payment_mode", "payment_status", "item_count",
-            "subtotal", "discount", "cgst", "sgst", "delivery_fee", "total", "address", "created_at",
+            "subtotal", "discount", "cgst", "sgst", "delivery_fee", "total", "address", "latitude", "longitude",
+            "created_at",
         ]
 
     def get_address(self, obj):
@@ -61,6 +62,11 @@ class PlaceOrderSerializer(serializers.Serializer):
     city = serializers.CharField(required=False, allow_blank=True)
     state = serializers.CharField(required=False, allow_blank=True)
     pincode = serializers.CharField(required=False, allow_blank=True)
+    # Drop-pin, for the delivery partner's map view — pulled from the saved
+    # address when `address_id` is used (see `validate()`), otherwise taken
+    # from these directly (e.g. a manually-typed address with a GPS pin).
+    latitude = serializers.FloatField(required=False, allow_null=True, min_value=-90, max_value=90)
+    longitude = serializers.FloatField(required=False, allow_null=True, min_value=-180, max_value=180)
     zone = serializers.PrimaryKeyRelatedField(queryset=Zone.objects.filter(is_open=True))
     payment_mode = serializers.ChoiceField(choices=Order.PaymentMode.choices, default=Order.PaymentMode.QR)
     delivery_slot_date = serializers.DateField(required=False, allow_null=True)
@@ -93,6 +99,8 @@ class PlaceOrderSerializer(serializers.Serializer):
             attrs["city"] = addr.get("city") or ""
             attrs["state"] = addr.get("state") or ""
             attrs["pincode"] = addr.get("pincode") or ""
+            attrs["latitude"] = addr.get("latitude")
+            attrs["longitude"] = addr.get("longitude")
         elif not attrs.get("address_line1"):
             raise serializers.ValidationError("Provide either address_id, or address_line1/city/state/pincode.")
         return attrs
@@ -123,6 +131,8 @@ class PlaceOrderSerializer(serializers.Serializer):
                 city=validated_data.get("city") or "",
                 state=validated_data.get("state") or "",
                 pincode=validated_data.get("pincode") or "",
+                latitude=validated_data.get("latitude"),
+                longitude=validated_data.get("longitude"),
                 gstin=validated_data.get("gstin", ""),
                 delivery_slot_date=validated_data.get("delivery_slot_date"),
                 delivery_slot_label=validated_data.get("delivery_slot_label", ""),

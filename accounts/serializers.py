@@ -63,6 +63,8 @@ class AddressItemSerializer(serializers.Serializer):
     state = serializers.CharField(max_length=100)
     country = serializers.CharField(max_length=100, default="India")
     pincode = serializers.CharField(max_length=10)
+    latitude = serializers.FloatField(required=False, allow_null=True, min_value=-90, max_value=90)
+    longitude = serializers.FloatField(required=False, allow_null=True, min_value=-180, max_value=180)
     is_default = serializers.BooleanField(default=False)
     created_at = serializers.CharField(read_only=True)
     updated_at = serializers.CharField(read_only=True)
