@@ -60,7 +60,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "brand", "cat", "sub", "category", "subcategory",
             "pack", "sku", "mrp", "price", "discount_pct", "rating", "ratings_count",
-            "is_out_of_stock", "main_image_url",
+            "is_out_of_stock", "is_active", "main_image_url",
         ]
 
 
@@ -83,7 +83,8 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             "id", "name", "brand", "category", "subcategory", "pack", "sku", "hsn_code",
-            "description", "mrp", "price", "cost_price", "gst_slab", "is_out_of_stock", "main_image_url",
+            "description", "mrp", "price", "cost_price", "gst_slab", "is_out_of_stock", "is_active",
+            "main_image_url",
         ]
         read_only_fields = ["id"]
 

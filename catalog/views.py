@@ -93,6 +93,15 @@ class ProductViewSet(ReadAfterWriteMixin, viewsets.ModelViewSet):
             return ProductWriteSerializer
         return ProductListSerializer
 
+    def get_queryset(self):
+        """Paused products (is_active=False) stay visible/editable to admins
+        (so the Live/Pause toggle can be switched back), but drop out of
+        every customer-facing list/search/PDP request."""
+        qs = super().get_queryset()
+        if not IsAdminRole().has_permission(self.request, self):
+            qs = qs.filter(is_active=True)
+        return qs
+
     @extend_schema(
         summary="Search products",
         description="Same as `?search=<query>`, kept as its own path to match "

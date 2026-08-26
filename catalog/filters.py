@@ -17,7 +17,10 @@ class ProductFilter(df.FilterSet):
 
     class Meta:
         model = Product
-        fields = ["category", "subcategory", "band", "min_price", "max_price", "brand", "is_out_of_stock"]
+        fields = [
+            "category", "subcategory", "band", "min_price", "max_price", "brand",
+            "is_out_of_stock", "is_active",
+        ]
 
     def filter_band(self, queryset, name, value):
         if value == "low":

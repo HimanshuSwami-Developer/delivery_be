@@ -27,10 +27,22 @@ class ProductStockInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ["name", "sku", "brand", "category", "subcategory", "price", "mrp", "is_out_of_stock"]
-    list_filter = ["category", "subcategory", "is_out_of_stock", "gst_slab"]
+    list_display = [
+        "name", "sku", "brand", "category", "subcategory", "price", "mrp",
+        "is_out_of_stock", "is_active",
+    ]
+    list_filter = ["category", "subcategory", "is_out_of_stock", "is_active", "gst_slab"]
     search_fields = ["name", "brand", "sku"]
     inlines = [ProductImageInline, ProductStockInline]
+    actions = ["mark_live", "mark_paused"]
+
+    @admin.action(description="Mark selected products as Live")
+    def mark_live(self, request, queryset):
+        queryset.update(is_active=True)
+
+    @admin.action(description="Pause selected products")
+    def mark_paused(self, request, queryset):
+        queryset.update(is_active=False)
 
 
 @admin.register(ProductReview)
