@@ -1,5 +1,6 @@
+from django.db.models import Case, CharField, Count, F, Q, Sum, Value, When
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -11,7 +12,7 @@ from core.helper.cloudinary_service import upload_image as cloudinary_upload_ima
 from core.mixins import ReadAfterWriteMixin
 from core.permissions import IsAdminRole, IsAdminRoleOrReadOnly
 
-from .filters import ProductFilter
+from .filters import ProductFilter, ProductStockFilter
 from .models import Category, Product, ProductImage, ProductReview, ProductStock, Subcategory
 from .serializers import (
     CategorySerializer,
@@ -187,15 +188,52 @@ class ProductReviewViewSet(viewsets.ModelViewSet):
 
 @extend_schema(tags=["Catalog - Inventory"])
 class ProductStockViewSet(viewsets.ModelViewSet):
-    """Admin-only: the Inventory screen's stock table + the +/- adjust
-    control (`incAdjust`/`decAdjust` in the Flutter cubit, done server-side
-    here instead of as a client-only draft delta)."""
+    """Admin-only: the Inventory screen's stock table (category tabs,
+    stock-state chips, search, paginated) + the +/- adjust control
+    (`incAdjust`/`decAdjust` in the Flutter cubit, done server-side here
+    instead of as a client-only draft delta)."""
 
-    queryset = ProductStock.objects.select_related("product")
     serializer_class = ProductStockSerializer
     permission_classes = [IsAdminRole]
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["product"]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = ProductStockFilter
+    search_fields = ["product__name", "product__sku", "product__brand"]
+    ordering_fields = ["on_hand", "reorder_level", "updated_at", "product__name"]
+    ordering = ["product__name"]
+
+    def get_queryset(self):
+        return ProductStock.objects.select_related("product", "product__category").annotate(
+            computed_state=Case(
+                When(on_hand__lte=0, then=Value(ProductStock.State.OUT)),
+                When(on_hand__lt=F("reorder_level"), then=Value(ProductStock.State.LOW)),
+                default=Value(ProductStock.State.HEALTHY),
+                output_field=CharField(),
+            )
+        )
+
+    @extend_schema(
+        summary="Inventory health summary",
+        description="Counts/totals across *every* stock row, ignoring category/state/search "
+        "filters and pagination — the Inventory screen's 4 stat cards need the true totals, "
+        "not just whatever page/filter is currently showing in the table below them.",
+        responses={200: OpenApiResponse(description="{tracked, below_reorder, out_of_stock, on_hand_total}")},
+    )
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        agg = self.get_queryset().aggregate(
+            tracked=Count("id"),
+            below_reorder=Count("id", filter=Q(computed_state=ProductStock.State.LOW)),
+            out_of_stock=Count("id", filter=Q(computed_state=ProductStock.State.OUT)),
+            on_hand_total=Sum("on_hand"),
+        )
+        return Response(
+            {
+                "tracked": agg["tracked"],
+                "below_reorder": agg["below_reorder"],
+                "out_of_stock": agg["out_of_stock"],
+                "on_hand_total": agg["on_hand_total"] or 0,
+            }
+        )
 
     @extend_schema(request=ProductStockAdjustSerializer, responses=ProductStockSerializer)
     @action(detail=True, methods=["post"])

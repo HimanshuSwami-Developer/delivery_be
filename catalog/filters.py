@@ -1,6 +1,21 @@
 import django_filters as df
 
-from .models import Product
+from .models import Product, ProductStock
+
+
+class ProductStockFilter(df.FilterSet):
+    """Backs the admin Inventory screen's category tabs + stock-state chips.
+    `state` filters against `computed_state`, an annotation the view adds
+    (see `ProductStockViewSet.get_queryset`) since `ProductStock.state` is a
+    Python property, not a real column — can't filter/order the DB query on
+    it otherwise."""
+
+    category = df.CharFilter(field_name="product__category__key")
+    state = df.ChoiceFilter(field_name="computed_state", choices=ProductStock.State.choices)
+
+    class Meta:
+        model = ProductStock
+        fields = ["category", "state", "product"]
 
 
 class ProductFilter(df.FilterSet):
