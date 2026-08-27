@@ -86,6 +86,14 @@ class ProductViewSet(ReadAfterWriteMixin, viewsets.ModelViewSet):
     ordering_fields = ["price", "ratings_count", "name", "created_at"]
     read_serializer_class = ProductDetailSerializer
 
+    def perform_create(self, serializer):
+        # Every product needs a stock row to show up on the Inventory
+        # screen at all — there's no separate "add stock entry" UI, so a
+        # product silently invisible to Inventory (and thus never
+        # adjustable) isn't a state we want reachable from "Add product".
+        product = serializer.save()
+        ProductStock.objects.create(product=product)
+
     def get_serializer_class(self):
         if self.action == "retrieve":
             return ProductDetailSerializer
