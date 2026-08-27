@@ -16,13 +16,12 @@ class DeliveryPartnerViewSet(ReadAfterWriteMixin, viewsets.ModelViewSet):
     modal (`?status=available`). `create`/`update` accept
     `DeliveryPartnerWriteSerializer`'s plain-id shape but respond with the
     full `DeliveryPartnerSerializer` (see `ReadAfterWriteMixin`), so the
-    response always has `zone_name`/`trips_today`/etc., not just what was
-    posted."""
+    response always has `trips_today`/etc., not just what was posted."""
 
-    queryset = DeliveryPartner.objects.select_related("user", "zone")
+    queryset = DeliveryPartner.objects.select_related("user")
     permission_classes = [IsAdminRole]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["zone", "status", "vehicle"]
+    filterset_fields = ["status", "vehicle"]
     read_serializer_class = DeliveryPartnerSerializer
 
     def get_serializer_class(self):

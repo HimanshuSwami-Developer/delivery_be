@@ -59,7 +59,7 @@ class Product(BaseModel):
     rating = models.DecimalField(max_digits=2, decimal_places=1, default=0)
     ratings_count = models.PositiveIntegerField(default=0)
     is_out_of_stock = models.BooleanField(
-        default=False, help_text="Manual override; per-zone stock lives in ProductStock."
+        default=False, help_text="Manual override; real stock lives in ProductStock."
     )
     main_image_url = models.URLField(blank=True)
 
@@ -95,24 +95,25 @@ class ProductImage(BaseModel):
 
 
 class ProductStock(BaseModel):
+    """One stock row per product — there's a single store, so this used to
+    be keyed by (product, zone) and is now just keyed by product."""
+
     class State(models.TextChoices):
         HEALTHY = "healthy", "Healthy"
         LOW = "low", "Below reorder"
         OUT = "out_of_stock", "Out of stock"
 
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="stocks")
-    zone = models.ForeignKey("zones.Zone", on_delete=models.CASCADE, related_name="product_stocks")
+    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name="stock")
     on_hand = models.IntegerField(default=0)
     reserved = models.IntegerField(default=0)
     reorder_level = models.PositiveIntegerField(default=20)
     max_stock = models.PositiveIntegerField(default=200)
 
     class Meta:
-        unique_together = ["product", "zone"]
         ordering = ["product__name"]
 
     def __str__(self):
-        return f"{self.product.sku} @ {self.zone.name}: {self.on_hand}"
+        return f"{self.product.sku}: {self.on_hand}"
 
     @property
     def state(self):

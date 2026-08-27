@@ -30,7 +30,6 @@ urlpatterns = [
     # admin console; per-resource read/write is split by role via
     # `core/permissions.py` (IsAdminRoleOrReadOnly etc.), not by separate
     # URL prefixes.
-    path('api/', include('zones.urls')),
     path('api/', include('catalog.urls')),
     path('api/', include('delivery.urls')),
     path('api/', include('cart.urls')),

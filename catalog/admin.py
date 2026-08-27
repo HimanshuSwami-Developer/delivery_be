@@ -53,6 +53,5 @@ class ProductReviewAdmin(admin.ModelAdmin):
 
 @admin.register(ProductStock)
 class ProductStockAdmin(admin.ModelAdmin):
-    list_display = ["product", "zone", "on_hand", "reserved", "reorder_level", "state"]
-    list_filter = ["zone"]
+    list_display = ["product", "on_hand", "reserved", "reorder_level", "state"]
     search_fields = ["product__name", "product__sku"]

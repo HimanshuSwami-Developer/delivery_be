@@ -40,7 +40,6 @@ class Order(BaseModel):
 
     order_number = models.CharField(max_length=20, unique=True, default=generate_order_number, editable=False)
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="orders")
-    zone = models.ForeignKey("zones.Zone", on_delete=models.PROTECT, related_name="orders")
     delivery_partner = models.ForeignKey(
         "delivery.DeliveryPartner", on_delete=models.SET_NULL, null=True, blank=True, related_name="orders"
     )

@@ -29,10 +29,10 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["status", "zone", "payment_mode"]
+    filterset_fields = ["status", "payment_mode"]
 
     def get_queryset(self):
-        qs = Order.objects.select_related("customer", "zone", "delivery_partner", "coupon").prefetch_related("items")
+        qs = Order.objects.select_related("customer", "delivery_partner", "coupon").prefetch_related("items")
         user = self.request.user
         if user.is_authenticated and (user.role == User.Role.ADMIN or user.is_superuser):
             return qs

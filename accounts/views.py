@@ -687,9 +687,8 @@ class AdminCustomerListView(APIView):
     """
     GET /api/auth/admin/customers/  -> the admin console's Customers screen:
     every customer with their (non-cancelled) order count, lifetime value,
-    last order date, the zone their most recent order was placed from, and
-    a tier derived from order count. All computed live from `orders.Order`
-    — nothing here is a stored/denormalized counter.
+    last order date, and a tier derived from order count. All computed live
+    from `orders.Order` — nothing here is a stored/denormalized counter.
     """
 
     permission_classes = [IsAuthenticated, IsAdminRole]
@@ -699,7 +698,7 @@ class AdminCustomerListView(APIView):
         # Deferred import: orders.models doesn't import accounts, so this
         # isn't strictly circular, but keeping cross-app aggregation reads
         # local to the view (not accounts' own models.py) matches the
-        # pattern used elsewhere in this project (see zones/delivery).
+        # pattern used elsewhere in this project (see delivery).
         from orders.models import Order
 
         customers = User.objects.filter(role=User.Role.CUSTOMER).annotate(
@@ -712,7 +711,6 @@ class AdminCustomerListView(APIView):
             last_order = (
                 Order.objects.filter(customer=c)
                 .exclude(status=Order.Status.CANCELLED)
-                .select_related("zone")
                 .order_by("-created_at")
                 .first()
             )
@@ -724,7 +722,6 @@ class AdminCustomerListView(APIView):
                     "orders_count": c.orders_count,
                     "ltv": c.ltv or 0,
                     "last_order_at": last_order.created_at if last_order else None,
-                    "zone": last_order.zone.name if last_order else None,
                     "tier": _tier_for(c.orders_count),
                 }
             )

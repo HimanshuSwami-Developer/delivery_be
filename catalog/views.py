@@ -183,11 +183,11 @@ class ProductStockViewSet(viewsets.ModelViewSet):
     control (`incAdjust`/`decAdjust` in the Flutter cubit, done server-side
     here instead of as a client-only draft delta)."""
 
-    queryset = ProductStock.objects.select_related("product", "zone")
+    queryset = ProductStock.objects.select_related("product")
     serializer_class = ProductStockSerializer
     permission_classes = [IsAdminRole]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["zone", "product"]
+    filterset_fields = ["product"]
 
     @extend_schema(request=ProductStockAdjustSerializer, responses=ProductStockSerializer)
     @action(detail=True, methods=["post"])

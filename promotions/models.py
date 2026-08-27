@@ -17,7 +17,6 @@ class Coupon(BaseModel):
     max_discount = models.PositiveIntegerField(null=True, blank=True, help_text="Cap applied to percent_discount.")
     valid_until = models.DateField(null=True, blank=True)
     terms = models.CharField(max_length=255, blank=True)
-    zones = models.ManyToManyField("zones.Zone", blank=True, related_name="coupons", help_text="Empty = all zones.")
     is_active = models.BooleanField(default=True)
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,

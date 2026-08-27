@@ -94,14 +94,13 @@ class ProductStockSerializer(serializers.ModelSerializer):
     sku = serializers.CharField(source="product.sku", read_only=True)
     pack = serializers.CharField(source="product.pack", read_only=True)
     main_image_url = serializers.URLField(source="product.main_image_url", read_only=True)
-    zone_name = serializers.CharField(source="zone.name", read_only=True)
     state = serializers.ReadOnlyField()
 
     class Meta:
         model = ProductStock
         fields = [
             "id", "product", "product_name", "sku", "pack", "main_image_url",
-            "zone", "zone_name", "on_hand", "reserved", "reorder_level", "max_stock", "state",
+            "on_hand", "reserved", "reorder_level", "max_stock", "state",
         ]
         read_only_fields = ["id"]
 

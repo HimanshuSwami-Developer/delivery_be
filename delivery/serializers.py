@@ -7,7 +7,6 @@ from .models import DeliveryPartner
 
 
 class DeliveryPartnerSerializer(serializers.ModelSerializer):
-    zone_name = serializers.CharField(source="zone.name", read_only=True)
     trips_today = serializers.ReadOnlyField()
     on_time_pct = serializers.ReadOnlyField()
     earnings_this_month_paise = serializers.ReadOnlyField()
@@ -16,7 +15,7 @@ class DeliveryPartnerSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeliveryPartner
         fields = [
-            "id", "user", "mobile_number", "partner_code", "name", "vehicle", "zone", "zone_name",
+            "id", "user", "mobile_number", "partner_code", "name", "vehicle",
             "rating", "status", "photo_url", "trips_today", "on_time_pct", "earnings_this_month_paise",
             "created_at", "updated_at",
         ]
@@ -32,7 +31,7 @@ class DeliveryPartnerWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DeliveryPartner
-        fields = ["id", "mobile_number", "partner_code", "name", "vehicle", "zone", "rating", "status", "photo_url"]
+        fields = ["id", "mobile_number", "partner_code", "name", "vehicle", "rating", "status", "photo_url"]
         read_only_fields = ["id"]
 
     def validate_mobile_number(self, value):

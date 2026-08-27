@@ -24,7 +24,6 @@ class DeliveryPartner(BaseModel):
     partner_code = models.CharField(max_length=30, unique=True, help_text="e.g. 'BSK-DP-2210'")
     name = models.CharField(max_length=255)
     vehicle = models.CharField(max_length=20, choices=Vehicle.choices, default=Vehicle.BIKE)
-    zone = models.ForeignKey("zones.Zone", on_delete=models.PROTECT, related_name="delivery_partners")
     rating = models.DecimalField(max_digits=2, decimal_places=1, default=5.0)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OFF_DUTY)
     photo_url = models.URLField(blank=True)

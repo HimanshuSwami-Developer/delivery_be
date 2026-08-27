@@ -68,7 +68,7 @@ class DashboardReportView(APIView):
         ]
 
         low_stock = (
-            ProductStock.objects.select_related("product", "zone")
+            ProductStock.objects.select_related("product")
             .filter(on_hand__lt=F("reorder_level"))
             .order_by("on_hand")[:8]
         )
@@ -76,7 +76,6 @@ class DashboardReportView(APIView):
             {
                 "product": s.product.name,
                 "sku": s.product.sku,
-                "zone": s.zone.name,
                 "on_hand": s.on_hand,
             }
             for s in low_stock

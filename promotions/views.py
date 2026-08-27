@@ -16,7 +16,7 @@ class CouponViewSet(viewsets.ModelViewSet):
     """Public read (customer "My coupons" screen); admin-only write (coupon
     management, including the active/paused toggle via PATCH)."""
 
-    queryset = Coupon.objects.prefetch_related("zones")
+    queryset = Coupon.objects.all()
     serializer_class = CouponSerializer
     permission_classes = [IsAdminRoleOrReadOnly]
     lookup_field = "code"

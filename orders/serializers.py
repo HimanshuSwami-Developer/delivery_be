@@ -4,7 +4,6 @@ from rest_framework import serializers
 from core.helper.cloudinary_service import upload_image as cloudinary_upload_image
 from core.service import groq_service
 from delivery.models import DeliveryPartner
-from zones.models import Zone
 
 from .models import Order, OrderItem
 
@@ -21,7 +20,6 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderListSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source="customer.name", read_only=True, default=None)
     customer_mobile = serializers.CharField(source="customer.mobile_number", read_only=True)
-    zone_name = serializers.CharField(source="zone.name", read_only=True)
     delivery_partner_name = serializers.CharField(source="delivery_partner.name", read_only=True, default=None)
     item_count = serializers.ReadOnlyField()
     address = serializers.SerializerMethodField()
@@ -29,7 +27,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            "id", "order_number", "customer", "customer_name", "customer_mobile", "zone", "zone_name",
+            "id", "order_number", "customer", "customer_name", "customer_mobile",
             "delivery_partner", "delivery_partner_name", "status", "payment_mode", "payment_status", "item_count",
             "subtotal", "discount", "cgst", "sgst", "delivery_fee", "total", "address", "latitude", "longitude",
             "created_at",
@@ -67,7 +65,6 @@ class PlaceOrderSerializer(serializers.Serializer):
     # from these directly (e.g. a manually-typed address with a GPS pin).
     latitude = serializers.FloatField(required=False, allow_null=True, min_value=-90, max_value=90)
     longitude = serializers.FloatField(required=False, allow_null=True, min_value=-180, max_value=180)
-    zone = serializers.PrimaryKeyRelatedField(queryset=Zone.objects.filter(is_open=True))
     payment_mode = serializers.ChoiceField(choices=Order.PaymentMode.choices, default=Order.PaymentMode.QR)
     delivery_slot_date = serializers.DateField(required=False, allow_null=True)
     delivery_slot_label = serializers.CharField(required=False, allow_blank=True)
@@ -120,7 +117,6 @@ class PlaceOrderSerializer(serializers.Serializer):
         with transaction.atomic():
             order = Order.objects.create(
                 customer=request.user,
-                zone=validated_data["zone"],
                 payment_mode=validated_data["payment_mode"],
                 # `or ""` (not just `.get(key, "")`) so this stays safe even if
                 # a future caller passes an explicit `None` for one of these —
