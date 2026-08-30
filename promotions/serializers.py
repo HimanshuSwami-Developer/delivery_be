@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Banner, Coupon, Notification
+from .models import Banner, Coupon, FestivalSetting, Notification
 
 
 class CouponSerializer(serializers.ModelSerializer):
@@ -34,6 +34,17 @@ class BannerSerializer(serializers.ModelSerializer):
             "is_active", "starts_at", "impressions", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "impressions", "created_at", "updated_at"]
+
+
+class FestivalSettingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FestivalSetting
+        fields = [
+            "id", "key", "override_mode", "starts_on", "ends_on", "accent_color", "gradient_start",
+            "gradient_end", "motif", "greeting_text", "popup_enabled", "popup_title", "popup_message",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "key", "created_at", "updated_at"]
 
 
 class NotificationSerializer(serializers.ModelSerializer):

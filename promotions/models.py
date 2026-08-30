@@ -84,6 +84,61 @@ class Banner(BaseModel):
         Banner.objects.filter(pk=self.pk).update(impressions=models.F("impressions") + 1)
 
 
+class FestivalSetting(BaseModel):
+    """Admin-editable theme for one festival takeover of the customer app's
+    home header (see the Flutter `FestivalTheme`/`FestivalCalendar`
+    classes). One row per [Key] — seeded by a data migration so the admin
+    console always has all of them ready to edit, no "add new" step
+    needed. A key with no matching row (shouldn't normally happen) just
+    means the app falls back to its own built-in defaults for that
+    festival — this table only ever overrides, never gates, the app
+    working at all.
+    """
+
+    class Key(models.TextChoices):
+        DIWALI = "diwali", "Diwali"
+        HOLI = "holi", "Holi"
+        CHRISTMAS = "christmas", "Christmas"
+        NEW_YEAR = "new_year", "New Year"
+        INDEPENDENCE_DAY = "independence_day", "Independence Day"
+        RAKSHA_BANDHAN = "raksha_bandhan", "Raksha Bandhan"
+
+    class Motif(models.TextChoices):
+        DIYA_LIGHTS = "diyaLights", "Diya / string lights"
+        COLOR_SPLASH = "colorSplash", "Colour splash"
+        SNOWFALL = "snowfall", "Snowfall"
+        CONFETTI = "confetti", "Confetti"
+
+    class OverrideMode(models.TextChoices):
+        AUTO = "auto", "Auto — by calendar date"
+        FORCE_ON = "force_on", "Always on"
+        FORCE_OFF = "force_off", "Always off"
+
+    key = models.CharField(max_length=30, choices=Key.choices, unique=True)
+    override_mode = models.CharField(max_length=10, choices=OverrideMode.choices, default=OverrideMode.AUTO)
+    starts_on = models.DateField(
+        null=True, blank=True,
+        help_text="'Auto' mode only. Overrides the app's built-in date window for this year "
+                  "(handy for Diwali/Holi/Raksha Bandhan, which move every year). Leave both "
+                  "dates blank to keep using the app's built-in window.",
+    )
+    ends_on = models.DateField(null=True, blank=True)
+    accent_color = models.CharField(max_length=9, default="#F3B14A", help_text="Hex, e.g. #F3B14A")
+    gradient_start = models.CharField(max_length=9, default="#173C6E", help_text="Header gradient, near corner.")
+    gradient_end = models.CharField(max_length=9, default="#0A1F3C", help_text="Header gradient, far corner.")
+    motif = models.CharField(max_length=15, choices=Motif.choices, default=Motif.DIYA_LIGHTS)
+    greeting_text = models.CharField(max_length=120, blank=True, help_text="Short badge shown in the home header.")
+    popup_enabled = models.BooleanField(default=True, help_text="Show the one-time popup on app open, not just the header badge.")
+    popup_title = models.CharField(max_length=120, blank=True)
+    popup_message = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["key"]
+
+    def __str__(self):
+        return self.get_key_display()
+
+
 class Notification(BaseModel):
     class Audience(models.TextChoices):
         ALL = "all", "All users"

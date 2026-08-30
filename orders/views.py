@@ -1,11 +1,13 @@
+from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.models import User
 from core.permissions import IsAdminOrDeliveryBoyRole, IsAdminRole
+from core.service.invoice_service import InvoiceService
 
 from .models import Order
 from .serializers import (
@@ -93,6 +95,21 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
         order.set_status(serializer.validated_data["status"])
         return Response(OrderDetailSerializer(order).data)
+
+    @extend_schema(
+        summary="Download this order's GST invoice as a PDF",
+        description="Available to the customer who placed it, the assigned delivery partner, or an admin — "
+                    "same visibility as `retrieve` (see `get_queryset`). Generated on demand from the order's "
+                    "own stored data, so it's available immediately after `place`, not just after delivery.",
+        responses={200: OpenApiResponse(description="application/pdf")},
+    )
+    @action(detail=True, methods=["get"])
+    def invoice(self, request, pk=None):
+        order = self.get_object()
+        pdf_bytes = InvoiceService.render_pdf(order)
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="invoice-{order.order_number}.pdf"'
+        return response
 
     @extend_schema(summary="[Admin] Assign/reassign a delivery partner", responses={200: OrderDetailSerializer})
     @action(detail=True, methods=["post"], permission_classes=[IsAdminRole])

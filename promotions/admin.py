@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Banner, Coupon, Notification
+from .models import Banner, Coupon, FestivalSetting, Notification
 
 
 @admin.register(Coupon)
@@ -15,6 +15,13 @@ class BannerAdmin(admin.ModelAdmin):
     list_display = ["title", "placement", "order", "is_active", "impressions"]
     list_filter = ["placement", "is_active"]
     search_fields = ["title"]
+
+
+@admin.register(FestivalSetting)
+class FestivalSettingAdmin(admin.ModelAdmin):
+    list_display = ["key", "override_mode", "starts_on", "ends_on", "accent_color", "motif", "popup_enabled"]
+    list_filter = ["override_mode", "motif", "popup_enabled"]
+    search_fields = ["key", "greeting_text"]
 
 
 @admin.register(Notification)

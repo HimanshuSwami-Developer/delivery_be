@@ -278,6 +278,14 @@ FAST2SMS_API_KEY = os.environ.get("FAST2SMS_API_KEY", "")
 # every time an order is placed, regardless of payment method/status.
 ORDER_NOTIFY_MOBILE_NUMBER = os.environ.get("ORDER_NOTIFY_MOBILE_NUMBER", "919718751020")
 
+# Seller details printed on the GST invoice PDF (core.service.invoice_service,
+# OrderViewSet.invoice) — set INVOICE_SELLER_ADDRESS/INVOICE_SELLER_GSTIN in
+# the environment once the business's real registered address/GSTIN are
+# known; blank GSTIN prints as "—" rather than a fake number.
+INVOICE_SELLER_NAME = os.environ.get("INVOICE_SELLER_NAME", "Aapno Bazar")
+INVOICE_SELLER_ADDRESS = os.environ.get("INVOICE_SELLER_ADDRESS", "")
+INVOICE_SELLER_GSTIN = os.environ.get("INVOICE_SELLER_GSTIN", "")
+
 
 # ---------------------------------------------------------------------------
 # Groq (vision OCR for QR payment screenshots)

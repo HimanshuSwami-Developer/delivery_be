@@ -7,8 +7,14 @@ from rest_framework.response import Response
 
 from core.permissions import IsAdminRole, IsAdminRoleOrReadOnly
 
-from .models import Banner, Coupon, Notification
-from .serializers import BannerSerializer, CouponSerializer, NotificationSerializer, ValidateCouponSerializer
+from .models import Banner, Coupon, FestivalSetting, Notification
+from .serializers import (
+    BannerSerializer,
+    CouponSerializer,
+    FestivalSettingSerializer,
+    NotificationSerializer,
+    ValidateCouponSerializer,
+)
 
 
 @extend_schema(tags=["Promotions - Coupons"])
@@ -64,6 +70,20 @@ class BannerViewSet(viewsets.ModelViewSet):
         banner = self.get_object()
         banner.track_impression()
         return Response({"detail": "tracked"})
+
+
+@extend_schema(tags=["Promotions - Festival Settings"])
+class FestivalSettingViewSet(viewsets.ModelViewSet):
+    """Per-festival home-header theme (colours, motif, greeting/popup text,
+    on/auto/off). Public read (the customer app fetches it on home load);
+    admin-only write. Rows are seeded 1:1 with the app's built-in festival
+    catalog by a data migration, so there's always exactly six to edit."""
+
+    queryset = FestivalSetting.objects.all()
+    serializer_class = FestivalSettingSerializer
+    permission_classes = [IsAdminRoleOrReadOnly]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["key", "override_mode"]
 
 
 @extend_schema(tags=["Promotions - Notifications"])
