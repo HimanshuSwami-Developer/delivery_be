@@ -1,6 +1,6 @@
 from io import BytesIO
 
-from django.conf import settings
+from reports.models import StoreSettings
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -34,11 +34,12 @@ class InvoiceService:
         label = ParagraphStyle("label", parent=styles["Normal"], textColor=_MUTED, fontSize=8, leading=11)
         body = ParagraphStyle("body", parent=styles["Normal"], fontSize=10, leading=14)
 
+        seller = StoreSettings.load()
         story = []
-        story.append(Paragraph(settings.INVOICE_SELLER_NAME, h1))
-        if settings.INVOICE_SELLER_ADDRESS:
-            story.append(Paragraph(settings.INVOICE_SELLER_ADDRESS, muted))
-        story.append(Paragraph(f"GSTIN: {settings.INVOICE_SELLER_GSTIN or '—'}", muted))
+        story.append(Paragraph(seller.resolved_business_name, h1))
+        if seller.resolved_address:
+            story.append(Paragraph(seller.resolved_address, muted))
+        story.append(Paragraph(f"GSTIN: {seller.resolved_gstin or '—'}", muted))
         story.append(Spacer(1, 10 * mm))
 
         meta_table = Table(
@@ -117,3 +118,107 @@ class InvoiceService:
 
         doc.build(story)
         return buffer.getvalue()
+
+    @staticmethod
+    def render_receipt_pdf(order) -> bytes:
+        """The same invoice data as `render_pdf`, laid out instead like an
+        80mm thermal till receipt — narrow single column, monospace item
+        rows, dashed section rules — for printing on a POS/receipt printer
+        rather than filing as an A4 tax document. Page height is estimated
+        from the item/slab-row counts (thermal rolls have no fixed page
+        size); reportlab just starts a second page if that undershoots, so
+        an under-estimate is harmless."""
+        width = 80 * mm
+        items = list(order.items.all())
+        slabs = _order_slab_breakdown(items)
+        height = (145 + len(items) * 7 + len(slabs) * 7) * mm
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, pagesize=(width, height),
+            topMargin=5 * mm, bottomMargin=5 * mm, leftMargin=4 * mm, rightMargin=4 * mm,
+        )
+        styles = getSampleStyleSheet()
+        center_bold = ParagraphStyle("centerBold", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=11, alignment=1, leading=13)
+        center_small = ParagraphStyle("centerSmall", parent=styles["Normal"], fontSize=7.5, alignment=1, leading=10)
+        small = ParagraphStyle("small", parent=styles["Normal"], fontSize=7.5, leading=10)
+
+        seller = StoreSettings.load()
+        story = [Paragraph(seller.resolved_business_name, center_bold)]
+        if seller.resolved_address:
+            story.append(Paragraph(seller.resolved_address, center_small))
+        story.append(Paragraph(f"GSTIN: {seller.resolved_gstin or '—'}", center_small))
+        story.append(Spacer(1, 2 * mm))
+        story.append(_receipt_rule())
+        story.append(Paragraph(f"Bill #: {order.order_number}", small))
+        story.append(Paragraph(f"Date: {order.created_at.strftime('%d-%m-%Y %I:%M %p')}", small))
+        if order.gstin:
+            story.append(Paragraph(f"Buyer GSTIN: {order.gstin}", small))
+        story.append(_receipt_rule())
+
+        item_rows = [["Item", "Qty", "Amount"]]
+        for item in items:
+            item_rows.append([item.product_name, str(item.qty), f"{item.amount}"])
+        item_table = Table(item_rows, colWidths=[42 * mm, 10 * mm, 20 * mm])
+        item_table.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), "Courier"),
+            ("FONTNAME", (0, 0), (-1, 0), "Courier-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.5, _INK),
+            ("TOPPADDING", (0, 0), (-1, -1), 1.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+        ]))
+        story.append(item_table)
+        story.append(_receipt_rule())
+
+        totals_rows = [["Subtotal", f"Rs {order.subtotal}"]]
+        if order.discount:
+            totals_rows.append(["Discount", f"-Rs {order.discount}"])
+        for slab, agg in slabs.items():
+            if agg["cgst"]:
+                totals_rows.append([f"CGST {slab}%", f"Rs {agg['cgst']}"])
+            if agg["sgst"]:
+                totals_rows.append([f"SGST {slab}%", f"Rs {agg['sgst']}"])
+        totals_rows.append(["Delivery fee", f"Rs {order.delivery_fee}"])
+        totals_table = Table(totals_rows, colWidths=[42 * mm, 30 * mm])
+        totals_table.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), "Courier"),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+            ("TOPPADDING", (0, 0), (-1, -1), 1),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+        ]))
+        story.append(totals_table)
+        story.append(_receipt_rule())
+
+        grand_total = Table([["TOTAL", f"Rs {order.total}"]], colWidths=[42 * mm, 30 * mm])
+        grand_total.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 11),
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ]))
+        story.append(grand_total)
+        story.append(Spacer(1, 1.5 * mm))
+        story.append(Paragraph(f"Payment: {order.get_payment_mode_display()} ({order.get_payment_status_display()})", small))
+        story.append(_receipt_rule())
+        story.append(Paragraph("Thank you for shopping with us!", center_small))
+
+        doc.build(story)
+        return buffer.getvalue()
+
+
+def _order_slab_breakdown(items):
+    """slab -> {cgst, sgst} totals across an order's line items, ordered by
+    slab rate — used to print one CGST/SGST line per slab actually present
+    on the receipt instead of one flat rate."""
+    agg = {}
+    for item in items:
+        row = agg.setdefault(item.gst_slab, {"cgst": 0, "sgst": 0})
+        row["cgst"] += item.cgst
+        row["sgst"] += item.sgst
+    return dict(sorted(agg.items(), key=lambda kv: float(kv[0])))
+
+
+def _receipt_rule():
+    return Paragraph("-" * 40, ParagraphStyle("rule", fontName="Courier", fontSize=7.5, textColor=_MUTED))

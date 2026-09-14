@@ -7,6 +7,7 @@ from .views import (
     Gstr3bExportView,
     SalesReportExportView,
     SalesReportView,
+    StoreSettingsView,
 )
 
 app_name = "reports"
@@ -18,4 +19,5 @@ urlpatterns = [
     path("gst/", GstReportView.as_view(), name="gst"),
     path("gst/gstr1/", Gstr1ExportView.as_view(), name="gst-gstr1"),
     path("gst/gstr3b/", Gstr3bExportView.as_view(), name="gst-gstr3b"),
+    path("settings/", StoreSettingsView.as_view(), name="settings"),
 ]

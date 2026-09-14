@@ -111,6 +111,20 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="invoice-{order.order_number}.pdf"'
         return response
 
+    @extend_schema(
+        summary="Download this order's receipt as a printable POS-format PDF",
+        description="Same data as `invoice`, laid out as an 80mm thermal-till receipt instead of an A4 tax "
+                    "invoice — for printing on a receipt printer. Same visibility as `retrieve`/`invoice`.",
+        responses={200: OpenApiResponse(description="application/pdf")},
+    )
+    @action(detail=True, methods=["get"])
+    def receipt(self, request, pk=None):
+        order = self.get_object()
+        pdf_bytes = InvoiceService.render_receipt_pdf(order)
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="receipt-{order.order_number}.pdf"'
+        return response
+
     @extend_schema(summary="[Admin] Assign/reassign a delivery partner", responses={200: OrderDetailSerializer})
     @action(detail=True, methods=["post"], permission_classes=[IsAdminRole])
     def assign_partner(self, request, pk=None):

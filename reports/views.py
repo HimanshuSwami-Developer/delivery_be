@@ -3,12 +3,12 @@ import json
 from datetime import date, timedelta
 from io import StringIO
 
-from django.conf import settings
 from django.db.models import Count, DecimalField, F, Sum
 from django.db.models.functions import TruncDate, TruncMonth
 from django.http import HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,6 +17,9 @@ from catalog.models import ProductStock
 from core.permissions import IsAdminRole
 from core.service.gst_report_service import GstReportService
 from orders.models import Order, OrderItem
+
+from .models import StoreSettings
+from .serializers import StoreSettingsSerializer
 
 
 def _parse_month(request):
@@ -331,7 +334,7 @@ class Gstr1ExportView(APIView):
                     slab_row["samt"] += item.sgst
 
         payload = {
-            "gstin": settings.INVOICE_SELLER_GSTIN or "",
+            "gstin": StoreSettings.load().resolved_gstin,
             "fp": f"{month:02d}{year:04d}",
             "b2b": [{"ctin": gstin, "inv": list(invoices.values())} for gstin, invoices in b2b_invoices_by_gstin.items()],
             "b2cs": list(b2cs_by_slab.values()),
@@ -361,3 +364,20 @@ class Gstr3bExportView(APIView):
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="gstr3b-{year:04d}-{month:02d}.pdf"'
         return response
+
+
+@extend_schema(tags=["Admin Reports"])
+class StoreSettingsView(RetrieveUpdateAPIView):
+    """
+    GET/PATCH /api/admin/reports/settings/ -> the seller's own GST profile
+    (business name, address, GSTIN) — printed on every generated invoice
+    and the GSTR-3B summary. Editing it here (instead of only via server
+    env vars) is what makes the admin console's GST settings panel take
+    effect on the next invoice/report generated, with no deploy needed.
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+    serializer_class = StoreSettingsSerializer
+
+    def get_object(self):
+        return StoreSettings.load()

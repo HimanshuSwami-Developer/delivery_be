@@ -1,6 +1,6 @@
 from io import BytesIO
 
-from django.conf import settings
+from reports.models import StoreSettings
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -28,9 +28,10 @@ class GstReportService:
         h1 = ParagraphStyle("h1", parent=styles["Heading1"], textColor=_INK, fontSize=20, spaceAfter=2)
         muted = ParagraphStyle("muted", parent=styles["Normal"], textColor=_MUTED, fontSize=9, leading=13)
 
+        seller = StoreSettings.load()
         story = [
-            Paragraph(settings.INVOICE_SELLER_NAME, h1),
-            Paragraph(f"GSTIN: {settings.INVOICE_SELLER_GSTIN or '—'}", muted),
+            Paragraph(seller.resolved_business_name, h1),
+            Paragraph(f"GSTIN: {seller.resolved_gstin or '—'}", muted),
             Spacer(1, 6 * mm),
             Paragraph(
                 f"GSTR-3B Summary · {month_label}",
