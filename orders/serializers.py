@@ -187,6 +187,11 @@ class PlaceOrderSerializer(serializers.Serializer):
             order.save(update_fields=[*update_fields, "updated_at"])
 
 
+class StoreLocationSerializer(serializers.Serializer):
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()
+
+
 class SetOrderStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Order.Status.choices)
 

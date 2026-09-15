@@ -16,7 +16,12 @@ from .serializers import (
     OrderListSerializer,
     PlaceOrderSerializer,
     SetOrderStatusSerializer,
+    StoreLocationSerializer,
 )
+
+# Fixed pickup point for the store/warehouse this instance serves.
+STORE_LATITUDE = 28.201806
+STORE_LONGITUDE = 76.627815
 
 
 @extend_schema(tags=["Orders"])
@@ -124,6 +129,11 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="receipt-{order.order_number}.pdf"'
         return response
+
+    @extend_schema(summary="Store/warehouse pickup location", responses={200: StoreLocationSerializer})
+    @action(detail=False, methods=["get"], permission_classes=[])
+    def store_location(self, request):
+        return Response({"latitude": STORE_LATITUDE, "longitude": STORE_LONGITUDE})
 
     @extend_schema(summary="[Admin] Assign/reassign a delivery partner", responses={200: OrderDetailSerializer})
     @action(detail=True, methods=["post"], permission_classes=[IsAdminRole])
