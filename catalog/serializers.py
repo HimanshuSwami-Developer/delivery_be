@@ -79,14 +79,29 @@ class ProductWriteSerializer(serializers.ModelSerializer):
     """Admin create/update — plain FK ids, no nested writes for images
     (use the dedicated ProductImage endpoints for those)."""
 
+    initial_stock = serializers.IntegerField(
+        write_only=True, required=False, default=0, min_value=0,
+        help_text="Create-only. Sets ProductStock.on_hand at creation time so a new product "
+                  "doesn't start at 0 and need a separate Inventory trip just to become sellable. "
+                  "Ignored on update — adjust stock from the Inventory screen instead.",
+    )
+
     class Meta:
         model = Product
         fields = [
             "id", "name", "brand", "category", "subcategory", "pack", "sku", "hsn_code",
             "description", "mrp", "price", "cost_price", "gst_slab", "is_out_of_stock", "is_active",
-            "main_image_url",
+            "main_image_url", "initial_stock",
         ]
         read_only_fields = ["id"]
+
+    def create(self, validated_data):
+        validated_data.pop("initial_stock", None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop("initial_stock", None)
+        return super().update(instance, validated_data)
 
 
 class ProductStockSerializer(serializers.ModelSerializer):

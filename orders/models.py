@@ -155,7 +155,34 @@ class Order(BaseModel):
             self.save(update_fields=update_fields)
         if is_new_delivery:
             self._award_loyalty_points()
+            self._sync_inventory()
         self._send_push(*self._STATUS_PUSH_COPY.get(new_status, (None, None)))
+
+    def _sync_inventory(self):
+        """Decrements each ordered product's `ProductStock.on_hand` by the
+        delivered quantity — best-effort, like `_award_loyalty_points`
+        above, and only fires once per order (guarded by the same
+        `is_new_delivery` check in `set_status`, so re-delivering/re-firing
+        this status doesn't double-deduct). Uses an atomic DB-side
+        `GREATEST(on_hand - qty, 0)` update rather than a Python
+        read-modify-write, so two orders for the same product delivered at
+        the same moment can't race each other into an inconsistent count.
+        A product with no stock row yet (shouldn't normally happen — see
+        `ProductViewSet.perform_create`) is silently skipped rather than
+        raising, since a missing stock row is a data-setup issue, not
+        something this delivery should fail over."""
+        from django.db.models import F
+        from django.db.models.functions import Greatest
+
+        from catalog.models import ProductStock
+
+        try:
+            for item in self.items.all():
+                ProductStock.objects.filter(product_id=item.product_id).update(
+                    on_hand=Greatest(F("on_hand") - item.qty, 0)
+                )
+        except Exception:
+            pass
 
     def _award_loyalty_points(self):
         """Best-effort, like `_send_push` below — a failure here must never

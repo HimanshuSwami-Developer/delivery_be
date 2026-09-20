@@ -92,8 +92,11 @@ class ProductViewSet(ReadAfterWriteMixin, viewsets.ModelViewSet):
         # screen at all — there's no separate "add stock entry" UI, so a
         # product silently invisible to Inventory (and thus never
         # adjustable) isn't a state we want reachable from "Add product".
+        # `initial_stock` (default 0) lets the admin set an opening
+        # quantity right here instead of a separate Inventory trip.
+        initial_stock = serializer.validated_data.get("initial_stock") or 0
         product = serializer.save()
-        ProductStock.objects.create(product=product)
+        ProductStock.objects.create(product=product, on_hand=initial_stock)
 
     def get_serializer_class(self):
         if self.action == "retrieve":
