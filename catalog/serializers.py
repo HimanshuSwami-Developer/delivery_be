@@ -60,7 +60,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "brand", "cat", "sub", "category", "subcategory",
             "pack", "sku", "mrp", "price", "discount_pct", "rating", "ratings_count",
-            "is_out_of_stock", "is_active", "main_image_url",
+            "is_out_of_stock", "is_active", "main_image_url", "gst_slab",
         ]
 
 
@@ -71,7 +71,7 @@ class ProductDetailSerializer(ProductListSerializer):
 
     class Meta(ProductListSerializer.Meta):
         fields = ProductListSerializer.Meta.fields + [
-            "description", "hsn_code", "gst_slab", "cost_price", "margin_pct", "images", "reviews",
+            "description", "hsn_code", "cost_price", "margin_pct", "images", "reviews",
         ]
 
 
