@@ -135,6 +135,12 @@ class Profile(BaseModel):
         help_text="The profile whose referral code this user signed up with, if any.",
     )
 
+    loyalty_points = models.PositiveIntegerField(
+        default=0,
+        help_text="Denormalized balance, kept in sync with LoyaltyTransaction via F()-expression "
+                   "updates (see LoyaltyTransaction.award_for_order/redeem) — never edit directly.",
+    )
+
     addresses = models.JSONField(
         default=list,
         blank=True,
@@ -176,3 +182,83 @@ class Profile(BaseModel):
         if not self.referral_code:
             self.referral_code = self._generate_referral_code()
         super().save(*args, **kwargs)
+
+
+class LoyaltyTransaction(BaseModel):
+    """One row per point-earning or point-spending event — the audit trail
+    behind `Profile.loyalty_points` (kept in sync via F()-expression updates
+    here, never edited directly). Points are earned automatically when an
+    order is delivered (see `award_for_order`, called from
+    `Order.set_status`) and spent by converting them into a personal
+    flat-discount `Coupon` (see `redeem`) — the same reward mechanism
+    already used for referral bonuses, so redeeming applies at checkout
+    exactly like any other coupon."""
+
+    class Reason(models.TextChoices):
+        ORDER_REWARD = "order_reward", "Order reward"
+        REDEEMED = "redeemed", "Redeemed for coupon"
+
+    # 1 point per this many rupees spent (order total, floor division).
+    POINTS_PER_RUPEES = 20
+    # 1 point = this many rupees off when redeemed.
+    POINTS_TO_RUPEE = 1
+    MIN_REDEEM_POINTS = 50
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="loyalty_transactions")
+    points = models.IntegerField(help_text="Positive = earned, negative = redeemed.")
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    order = models.ForeignKey(
+        "orders.Order", on_delete=models.SET_NULL, null=True, blank=True, related_name="loyalty_transactions"
+    )
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.mobile_number}: {self.points:+d} ({self.reason})"
+
+    @classmethod
+    def award_for_order(cls, order):
+        """Idempotent — safe to call more than once for the same order
+        (e.g. if a status webhook/admin action re-fires `set_status`)."""
+        profile = getattr(order.customer, "profile", None)
+        if not profile:
+            return
+        if cls.objects.filter(order=order, reason=cls.Reason.ORDER_REWARD).exists():
+            return
+        points = order.total // cls.POINTS_PER_RUPEES
+        if points <= 0:
+            return
+        cls.objects.create(
+            user=order.customer, points=points, reason=cls.Reason.ORDER_REWARD,
+            order=order, note=f"Order {order.order_number}",
+        )
+        Profile.objects.filter(pk=profile.pk).update(loyalty_points=models.F("loyalty_points") + points)
+
+    @classmethod
+    def redeem(cls, user, points):
+        """Raises ValueError (caller turns this into a 400) for any
+        business-rule failure — insufficient balance, below the minimum,
+        etc. — never a silent no-op, unlike the best-effort
+        `award_for_order`, since this is a direct user action."""
+        if points < cls.MIN_REDEEM_POINTS:
+            raise ValueError(f"Redeem at least {cls.MIN_REDEEM_POINTS} points at a time.")
+        profile = getattr(user, "profile", None)
+        if not profile or points > profile.loyalty_points:
+            raise ValueError("Not enough points.")
+
+        from promotions.models import Coupon
+
+        suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
+        coupon = Coupon.objects.create(
+            code=f"LOYALTY{user.id}{suffix}",
+            title=f"Redeemed {points} loyalty points",
+            flat_discount=points * cls.POINTS_TO_RUPEE,
+            assigned_to=user,
+        )
+        cls.objects.create(
+            user=user, points=-points, reason=cls.Reason.REDEEMED, note=f"Redeemed for coupon {coupon.code}",
+        )
+        Profile.objects.filter(pk=profile.pk).update(loyalty_points=models.F("loyalty_points") - points)
+        return coupon

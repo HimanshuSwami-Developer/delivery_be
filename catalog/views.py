@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 
 from core.helper.cloudinary_service import upload_image as cloudinary_upload_image
 from core.mixins import ReadAfterWriteMixin
-from core.permissions import IsAdminRole, IsAdminRoleOrReadOnly
+from core.permissions import IsAdminRole, IsAdminRoleOrReadOnly, IsOwnerOrAdmin
 
 from .filters import ProductFilter, ProductStockFilter
 from .models import Category, Product, ProductImage, ProductReview, ProductStock, Subcategory
@@ -169,8 +169,12 @@ class ProductImageViewSet(viewsets.ModelViewSet):
 
 @extend_schema(tags=["Catalog - Reviews"])
 class ProductReviewViewSet(viewsets.ModelViewSet):
-    """Anyone can read a product's reviews; only an authenticated customer
-    can post one (one review per product per user)."""
+    """Anyone can read a product's reviews; any authenticated customer can
+    post one (one review per product per user, enforced by the model's
+    `unique_together`); only its own author (or an admin) can edit/delete
+    it — see `IsOwnerOrAdmin`. Saving/deleting a review recalculates the
+    product's `rating`/`ratings_count` (see `Product.recalculate_rating`,
+    called from `ProductReview.save`/`delete`)."""
 
     queryset = ProductReview.objects.select_related("user")
     serializer_class = ProductReviewSerializer
@@ -180,7 +184,9 @@ class ProductReviewViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
             return [AllowAny()]
-        return [IsAuthenticated()]
+        if self.action == "create":
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsOwnerOrAdmin()]
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

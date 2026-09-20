@@ -23,3 +23,40 @@ class SupportTicket(BaseModel):
 
     def __str__(self):
         return f"{self.subject} ({self.user.mobile_number})"
+
+
+class SupportConfig(BaseModel):
+    """Singleton — the one admin-editable row of customer-support contact
+    info the app's "Help & support" screen fetches (call + WhatsApp only).
+    Always exactly one row (pk=1); `load()` creates it on first access if
+    missing, so the app's GET never 404s even before an admin fills it in
+    (buttons just render disabled until real values are set)."""
+
+    phone_number = models.CharField(
+        max_length=20, blank=True,
+        help_text="With country code, e.g. +919718751020 — used for the 'Call support' tel: link.",
+    )
+    whatsapp_number = models.CharField(
+        max_length=20, blank=True,
+        help_text="Digits only with country code, e.g. 919718751020 — used to build the wa.me link.",
+    )
+    whatsapp_message = models.CharField(
+        max_length=300, blank=True, default="Hi, I need help with my Aapno Bazar order.",
+        help_text="Pre-filled text the WhatsApp chat opens with.",
+    )
+    reply_time_label = models.CharField(max_length=60, blank=True, default="Typical reply in under 2 min")
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "Support contact config"

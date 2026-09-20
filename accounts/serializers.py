@@ -2,7 +2,7 @@ import re
 
 from rest_framework import serializers
 
-from .models import DeviceToken, Profile
+from .models import DeviceToken, LoyaltyTransaction, Profile
 
 MOBILE_REGEX = re.compile(r"^\+?[1-9]\d{9,14}$")
 
@@ -108,12 +108,12 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = [
-            "id", "name", "email", "mobile_number", "role", "referral_code", "addresses", "gps_locations",
-            "created_at", "updated_at",
+            "id", "name", "email", "mobile_number", "role", "referral_code", "loyalty_points",
+            "addresses", "gps_locations", "created_at", "updated_at",
         ]
         read_only_fields = [
-            "id", "mobile_number", "role", "referral_code", "addresses", "gps_locations",
-            "created_at", "updated_at",
+            "id", "mobile_number", "role", "referral_code", "loyalty_points",
+            "addresses", "gps_locations", "created_at", "updated_at",
         ]
 
 
@@ -139,3 +139,25 @@ class ProfileWriteSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data.pop("referral_code_used", None)
         return super().update(instance, validated_data)
+
+
+class ReferralSerializer(serializers.Serializer):
+    """One row per person who signed up with my referral code — built from
+    plain dicts in `MyReferralsView` (not a `Profile`/`Coupon` ModelSerializer),
+    since it merges fields from both."""
+
+    name = serializers.CharField()
+    joined_at = serializers.DateTimeField()
+    reward_code = serializers.CharField(allow_null=True)
+    reward_amount = serializers.IntegerField()
+    reward_redeemed = serializers.BooleanField()
+
+
+class LoyaltyTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoyaltyTransaction
+        fields = ["id", "points", "reason", "note", "created_at"]
+
+
+class RedeemLoyaltyPointsSerializer(serializers.Serializer):
+    points = serializers.IntegerField(min_value=1)

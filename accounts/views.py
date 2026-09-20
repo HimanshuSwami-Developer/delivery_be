@@ -12,14 +12,17 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import OTP, DeviceToken, Profile, User
+from .models import OTP, DeviceToken, LoyaltyTransaction, Profile, User
 from .serializers import (
     AddressItemSerializer,
     DeviceTokenSerializer,
     GPSLocationItemSerializer,
+    LoyaltyTransactionSerializer,
     MasterOTPLoginSerializer,
     ProfileSerializer,
     ProfileWriteSerializer,
+    RedeemLoyaltyPointsSerializer,
+    ReferralSerializer,
     ResendOTPSerializer,
     SendOTPSerializer,
     VerifyOTPSerializer,
@@ -396,6 +399,96 @@ def _get_profile_or_400(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
     return profile, None
+
+
+class MyReferralsView(APIView):
+    """People who signed up using my referral code, and what each one
+    earned me — reconstructs the reward coupon deterministically from its
+    code (`REFEARN{referrer_id}{referred_id}`, see
+    `ProfileView._grant_referral_rewards`) rather than needing a new FK."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["Profile - Referrals"], summary="People who signed up with my referral code", responses=ReferralSerializer(many=True))
+    def get(self, request):
+        profile, err = _get_profile_or_400(request)
+        if err:
+            return err
+
+        from promotions.models import Coupon
+
+        referred = list(profile.referrals.select_related("user").order_by("-created_at"))
+        codes = [f"REFEARN{profile.user_id}{p.user_id}" for p in referred]
+        coupons_by_code = {c.code: c for c in Coupon.objects.filter(code__in=codes)}
+
+        results = []
+        for p in referred:
+            coupon = coupons_by_code.get(f"REFEARN{profile.user_id}{p.user_id}")
+            results.append({
+                "name": p.name or "A friend",
+                "joined_at": p.created_at,
+                "reward_code": coupon.code if coupon else None,
+                "reward_amount": coupon.flat_discount if coupon else 0,
+                "reward_redeemed": bool(coupon and coupon.used_count > 0),
+            })
+
+        return Response({
+            "referral_code": profile.referral_code,
+            "total_referrals": len(results),
+            "total_rewards_earned": sum(r["reward_amount"] for r in results),
+            "referrals": ReferralSerializer(results, many=True).data,
+        })
+
+
+class MyLoyaltyView(APIView):
+    """GET the signed-in customer's points balance + recent transaction
+    history. Points are earned automatically on delivery
+    (`LoyaltyTransaction.award_for_order`) — this is read-only; see
+    `RedeemLoyaltyPointsView` for spending them."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["Profile - Loyalty"], summary="My loyalty points balance + history")
+    def get(self, request):
+        profile, err = _get_profile_or_400(request)
+        if err:
+            return err
+        transactions = LoyaltyTransaction.objects.filter(user=request.user)[:50]
+        return Response({
+            "points": profile.loyalty_points,
+            "min_redeem_points": LoyaltyTransaction.MIN_REDEEM_POINTS,
+            "points_to_rupee": LoyaltyTransaction.POINTS_TO_RUPEE,
+            "transactions": LoyaltyTransactionSerializer(transactions, many=True).data,
+        })
+
+
+class RedeemLoyaltyPointsView(APIView):
+    """Converts points into a personal flat-discount `Coupon` (the same
+    reward mechanism referrals already use) — applied at checkout like any
+    other coupon, not auto-credited to an order."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=["Profile - Loyalty"], summary="Redeem points for a discount coupon", request=RedeemLoyaltyPointsSerializer)
+    def post(self, request):
+        profile, err = _get_profile_or_400(request)
+        if err:
+            return err
+        serializer = RedeemLoyaltyPointsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            coupon = LoyaltyTransaction.redeem(request.user, serializer.validated_data["points"])
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile.refresh_from_db()
+        return Response({
+            "detail": f"Redeemed for a ₹{coupon.flat_discount} coupon.",
+            "coupon_code": coupon.code,
+            "discount": coupon.flat_discount,
+            "remaining_points": profile.loyalty_points,
+        })
 
 
 class AddressListCreateView(APIView):

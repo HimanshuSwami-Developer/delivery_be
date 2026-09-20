@@ -81,6 +81,17 @@ class Product(BaseModel):
             return None
         return round(100 * (self.price - self.cost_price) / self.price, 1)
 
+    def recalculate_rating(self):
+        """Recomputes the denormalized `rating`/`ratings_count` from live
+        `ProductReview` rows — called by `ProductReview.save()`/`delete()`
+        so these stay in sync with reviews as they're posted, edited, or
+        removed, instead of needing an admin to hand-set them."""
+        agg = self.reviews.aggregate(avg=models.Avg("rating"), count=models.Count("id"))
+        Product.objects.filter(pk=self.pk).update(
+            rating=round(agg["avg"] or 0, 1),
+            ratings_count=agg["count"] or 0,
+        )
+
 
 class ProductImage(BaseModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
@@ -136,3 +147,12 @@ class ProductReview(BaseModel):
 
     def __str__(self):
         return f"{self.product.sku} - {self.rating}★ by {self.user.mobile_number}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.product.recalculate_rating()
+
+    def delete(self, *args, **kwargs):
+        product = self.product
+        super().delete(*args, **kwargs)
+        product.recalculate_rating()

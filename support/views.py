@@ -1,13 +1,13 @@
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
-from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework import generics, viewsets
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from accounts.models import User
 from core.mixins import ReadAfterWriteMixin
 
-from .models import SupportTicket
-from .serializers import SupportTicketAdminUpdateSerializer, SupportTicketSerializer
+from .models import SupportConfig, SupportTicket
+from .serializers import SupportConfigSerializer, SupportTicketAdminUpdateSerializer, SupportTicketSerializer
 
 
 @extend_schema(tags=["Support"])
@@ -36,3 +36,16 @@ class SupportTicketViewSet(ReadAfterWriteMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+@extend_schema(tags=["Support"])
+class SupportConfigView(generics.RetrieveAPIView):
+    """Public read of the admin-set call/WhatsApp/chat contact info (Django
+    admin is where it's edited — see `SupportConfigAdmin`). No write
+    endpoint on purpose: this is app-config, not user data."""
+
+    serializer_class = SupportConfigSerializer
+    permission_classes = [AllowAny]
+
+    def get_object(self):
+        return SupportConfig.load()

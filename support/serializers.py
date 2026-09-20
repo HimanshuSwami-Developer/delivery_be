@@ -1,6 +1,8 @@
+from urllib.parse import quote
+
 from rest_framework import serializers
 
-from .models import SupportTicket
+from .models import SupportConfig, SupportTicket
 
 
 class SupportTicketSerializer(serializers.ModelSerializer):
@@ -16,3 +18,17 @@ class SupportTicketAdminUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = SupportTicket
         fields = ["status", "admin_reply"]
+
+
+class SupportConfigSerializer(serializers.ModelSerializer):
+    whatsapp_link = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SupportConfig
+        fields = ["phone_number", "whatsapp_number", "whatsapp_link", "reply_time_label"]
+
+    def get_whatsapp_link(self, obj) -> str:
+        if not obj.whatsapp_number:
+            return ""
+        text = quote(obj.whatsapp_message)
+        return f"https://wa.me/{obj.whatsapp_number}?text={text}"

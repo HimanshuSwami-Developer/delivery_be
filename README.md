@@ -43,20 +43,25 @@ python manage.py createsuperuser --mobile_number +910000000000  # optional, for 
 python manage.py runserver
 ```
 
-By default `SMS_BACKEND=console`, so OTPs are simply printed to the
-terminal/log instead of being sent — perfect for local development. No
-external SMS account is required to try the project out.
+By default `OTP_SMS_BACKEND=console` and `SMS_BACKEND=console`, so OTPs
+and order-invoice notifications are simply printed to the terminal/log
+instead of being sent — perfect for local development. No external SMS
+account is required to try the project out.
 
 ## Switching to a real SMS provider
 
-Set `SMS_BACKEND=fast2sms` and fill in `FAST2SMS_API_KEY` (env var or
-directly in `core/settings.py`) — sends plain SMS via Fast2SMS's Quick SMS
-route. See `core/service/sms_service.py` for the implementation.
+`OTP_SMS_BACKEND` (login OTPs) supports:
+- `twofactor` — fill in `TWO_FACTOR_API_KEY`. Sends via 2Factor's SMS OTP
+  API (its own pre-approved OTP template, no DLT registration needed).
 
-To use a different provider (AWS SNS, TextLocal, Twilio, etc.), add
-another `_send_via_xxx` method to `SMSService` and branch on it in
-`send_otp_sms`. Every view calls `SMSService.send_otp_sms(mobile, otp)` —
-nothing else in the code needs to change.
+`SMS_BACKEND` (order-invoice notifications) has no real-send backend right
+now — only `console` (2Factor's API can't send arbitrary text, just its
+own OTP template).
+
+See `core/service/sms_service.py` for the implementations. To use a
+different provider, add another `_send_via_xxx` method to `SMSService`
+and branch on it in `send_otp_sms`/`send_order_invoice_sms` — nothing
+else in the code needs to change.
 
 ## API Reference
 

@@ -7,7 +7,10 @@ from .views import (
     GPSLocationDetailView,
     GPSLocationListCreateView,
     MasterOTPLoginView,
+    MyLoyaltyView,
+    MyReferralsView,
     ProfileView,
+    RedeemLoyaltyPointsView,
     RegisterDeviceView,
     ResendOTPView,
     SendOTPView,
@@ -24,6 +27,10 @@ urlpatterns = [
     path("device-token/", RegisterDeviceView.as_view(), name="device-token"),
 
     path("profile/", ProfileView.as_view(), name="profile"),
+
+    path("profile/referrals/", MyReferralsView.as_view(), name="my-referrals"),
+    path("profile/loyalty/", MyLoyaltyView.as_view(), name="my-loyalty"),
+    path("profile/loyalty/redeem/", RedeemLoyaltyPointsView.as_view(), name="loyalty-redeem"),
 
     path("profile/addresses/", AddressListCreateView.as_view(), name="address-list-create"),
     path("profile/addresses/<str:address_id>/", AddressDetailView.as_view(), name="address-detail"),

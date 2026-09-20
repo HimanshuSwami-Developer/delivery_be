@@ -147,12 +147,25 @@ class Order(BaseModel):
         self.status = new_status
         field = self._STATUS_TIMESTAMP_FIELD.get(new_status)
         update_fields = ["status", "updated_at"]
+        is_new_delivery = new_status == self.Status.DELIVERED and not self.delivered_at
         if field and not getattr(self, field):
             setattr(self, field, timezone.now())
             update_fields.append(field)
         if save:
             self.save(update_fields=update_fields)
+        if is_new_delivery:
+            self._award_loyalty_points()
         self._send_push(*self._STATUS_PUSH_COPY.get(new_status, (None, None)))
+
+    def _award_loyalty_points(self):
+        """Best-effort, like `_send_push` below — a failure here must never
+        block the delivery-status update itself."""
+        from accounts.models import LoyaltyTransaction
+
+        try:
+            LoyaltyTransaction.award_for_order(self)
+        except Exception:
+            pass
 
     def send_placed_push(self):
         """Called once, right after `OrderViewSet.place` creates the order —

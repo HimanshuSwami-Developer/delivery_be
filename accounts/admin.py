@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import OTP, DeviceToken, Profile, User
+from .models import OTP, DeviceToken, LoyaltyTransaction, Profile, User
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
@@ -31,10 +31,18 @@ class OTPAdmin(admin.ModelAdmin):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ["name", "user", "email", "referral_code", "referred_by", "is_active", "is_delete", "created_at"]
+    list_display = ["name", "user", "email", "referral_code", "referred_by", "loyalty_points", "is_active", "is_delete", "created_at"]
     list_filter = ["is_active"]
     search_fields = ["name", "email", "user__mobile_number", "referral_code"]
-    readonly_fields = ["referral_code", "created_at", "updated_at"]
+    readonly_fields = ["referral_code", "loyalty_points", "created_at", "updated_at"]
+
+
+@admin.register(LoyaltyTransaction)
+class LoyaltyTransactionAdmin(admin.ModelAdmin):
+    list_display = ["user", "points", "reason", "order", "created_at"]
+    list_filter = ["reason"]
+    search_fields = ["user__mobile_number", "note"]
+    readonly_fields = ["created_at", "updated_at"]
 
 
 @admin.register(DeviceToken)
