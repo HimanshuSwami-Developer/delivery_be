@@ -42,7 +42,13 @@ class CouponViewSet(viewsets.ModelViewSet):
         subtotal = serializer.validated_data["subtotal"]
 
         coupon = Coupon.objects.filter(code__iexact=code).first()
-        if not coupon or not coupon.is_valid_now():
+        user = request.user if request.user.is_authenticated else None
+        if coupon and coupon.already_used_by(user):
+            return Response(
+                {"valid": False, "detail": f'You\'ve already used "{code}" — it\'s a one-time code per customer.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not coupon or not coupon.is_valid_now(user=user):
             return Response({"valid": False, "detail": f'"{code}" is not a valid code.'}, status=status.HTTP_400_BAD_REQUEST)
         if subtotal < coupon.min_order_value:
             return Response(

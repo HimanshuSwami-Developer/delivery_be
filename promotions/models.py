@@ -38,14 +38,25 @@ class Coupon(BaseModel):
             return min(amount, self.max_discount) if self.max_discount else amount
         return self.flat_discount or 0
 
-    def is_valid_now(self):
+    def is_valid_now(self, user=None):
         if not self.is_active:
             return False
         if self.valid_until and timezone.localdate() > self.valid_until:
             return False
         if self.assigned_to_id and self.used_count >= 1:
             return False
+        if user is not None and self.already_used_by(user):
+            return False
         return True
+
+    def already_used_by(self, user):
+        """One redemption per customer for a GENERAL coupon (no
+        `assigned_to`) — checked separately from the `assigned_to`
+        single-use-total rule above, which already covers personal
+        coupons (only their one assignee can apply one anyway)."""
+        if self.assigned_to_id or not user or not getattr(user, "is_authenticated", False):
+            return False
+        return self.orders.exclude(status="cancelled").filter(customer=user).exists()
 
     @property
     def used_count(self):
