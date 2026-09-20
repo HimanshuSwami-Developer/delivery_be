@@ -41,8 +41,10 @@ class SupportConfig(BaseModel):
         help_text="Digits only with country code, e.g. 919718751020 — used to build the wa.me link.",
     )
     whatsapp_message = models.CharField(
-        max_length=300, blank=True, default="Hi, I need help with my Aapno Bazar order.",
-        help_text="Pre-filled text the WhatsApp chat opens with.",
+        max_length=300, blank=True, default="Hey, I am {name} and I need help.",
+        help_text="Pre-filled text the WhatsApp chat opens with. Include the literal "
+                  "'{name}' placeholder to have it replaced with the signed-in customer's "
+                  "own name (see SupportConfigSerializer.get_whatsapp_link).",
     )
     reply_time_label = models.CharField(max_length=60, blank=True, default="Typical reply in under 2 min")
 
@@ -60,3 +62,20 @@ class SupportConfig(BaseModel):
 
     def __str__(self):
         return "Support contact config"
+
+
+class SupportFAQ(BaseModel):
+    """Admin-editable Q&A shown on the customer app's "Help & support"
+    screen — public read, admin write, ordered by `order` then insertion."""
+
+    question = models.CharField(max_length=255)
+    answer = models.TextField()
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+        verbose_name = "Support FAQ"
+        verbose_name_plural = "Support FAQs"
+
+    def __str__(self):
+        return self.question

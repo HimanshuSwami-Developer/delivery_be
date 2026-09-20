@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import SupportConfig, SupportTicket
+from .models import SupportConfig, SupportFAQ, SupportTicket
 
 
 @admin.register(SupportTicket)
@@ -20,3 +20,10 @@ class SupportConfigAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(SupportFAQ)
+class SupportFAQAdmin(admin.ModelAdmin):
+    list_display = ["question", "order"]
+    list_editable = ["order"]
+    search_fields = ["question", "answer"]

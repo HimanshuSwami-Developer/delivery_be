@@ -2,7 +2,7 @@ from urllib.parse import quote
 
 from rest_framework import serializers
 
-from .models import SupportConfig, SupportTicket
+from .models import SupportConfig, SupportFAQ, SupportTicket
 
 
 class SupportTicketSerializer(serializers.ModelSerializer):
@@ -30,5 +30,23 @@ class SupportConfigSerializer(serializers.ModelSerializer):
     def get_whatsapp_link(self, obj) -> str:
         if not obj.whatsapp_number:
             return ""
-        text = quote(obj.whatsapp_message)
+        request = self.context.get("request")
+        name = None
+        if request is not None and request.user.is_authenticated:
+            profile = getattr(request.user, "profile", None)
+            name = (profile.name if profile and profile.name else None) or request.user.name
+        try:
+            message = obj.whatsapp_message.format(name=name or "a customer")
+        except (KeyError, IndexError):
+            # Admin edited the template and dropped/broke the `{name}`
+            # placeholder — fall back to the raw text rather than 500ing.
+            message = obj.whatsapp_message
+        text = quote(message)
         return f"https://wa.me/{obj.whatsapp_number}?text={text}"
+
+
+class SupportFAQSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupportFAQ
+        fields = ["id", "question", "answer", "order"]
+        read_only_fields = ["id"]

@@ -5,9 +5,15 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from accounts.models import User
 from core.mixins import ReadAfterWriteMixin
+from core.permissions import IsAdminRoleOrReadOnly
 
-from .models import SupportConfig, SupportTicket
-from .serializers import SupportConfigSerializer, SupportTicketAdminUpdateSerializer, SupportTicketSerializer
+from .models import SupportConfig, SupportFAQ, SupportTicket
+from .serializers import (
+    SupportConfigSerializer,
+    SupportFAQSerializer,
+    SupportTicketAdminUpdateSerializer,
+    SupportTicketSerializer,
+)
 
 
 @extend_schema(tags=["Support"])
@@ -49,3 +55,13 @@ class SupportConfigView(generics.RetrieveAPIView):
 
     def get_object(self):
         return SupportConfig.load()
+
+
+@extend_schema(tags=["Support"])
+class SupportFAQViewSet(viewsets.ModelViewSet):
+    """Public read (the "Help & support" screen's common-questions list);
+    admin-only write."""
+
+    queryset = SupportFAQ.objects.all()
+    serializer_class = SupportFAQSerializer
+    permission_classes = [IsAdminRoleOrReadOnly]
