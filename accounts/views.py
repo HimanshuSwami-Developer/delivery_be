@@ -40,6 +40,16 @@ def get_tokens_for_user(user):
     }
 
 
+def _is_master_number(mobile_number):
+    """True if `mobile_number` (already E.164-normalized) is on the
+    explicit master-OTP allowlist. Unlike `MasterOTPLoginView`, an empty
+    `MASTER_OTP_MOBILE_NUMBERS` here means "master OTP disabled for the
+    real send/verify flow" — never "allow any number" — so a blank env
+    var in production can't silently skip real SMS for every user."""
+    allowed_numbers = {normalize_mobile(n) for n in settings.MASTER_OTP_MOBILE_NUMBERS}
+    return bool(allowed_numbers) and mobile_number in allowed_numbers
+
+
 class OTPRateThrottle(AnonRateThrottle):
     scope = "otp"
 
@@ -61,8 +71,13 @@ class SendOTPView(APIView):
         serializer = SendOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         mobile_number = serializer.validated_data["mobile_number"]
+        is_master = _is_master_number(mobile_number)
 
-        otp_code = OTP.generate_otp()
+        # Master-OTP numbers get the fixed settings.MASTER_OTP code seeded as
+        # their "OTP" row and never get a real SMS — everything downstream
+        # (VerifyOTPView, resend cooldown) works unmodified since it's still
+        # a normal OTP row, just with a known code.
+        otp_code = settings.MASTER_OTP if is_master else OTP.generate_otp()
         expires_at = timezone.now() + timedelta(minutes=settings.OTP_EXPIRY_MINUTES)
 
         OTP.objects.create(
@@ -71,7 +86,7 @@ class SendOTPView(APIView):
             expires_at=expires_at,
         )
 
-        if not SMSService.send_otp_sms(mobile_number, otp_code):
+        if not is_master and not SMSService.send_otp_sms(mobile_number, otp_code):
             return Response(
                 {"detail": "Failed to send OTP. Please try again."},
                 status=status.HTTP_502_BAD_GATEWAY,
@@ -104,12 +119,13 @@ class ResendOTPView(APIView):
         serializer = ResendOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         mobile_number = serializer.validated_data["mobile_number"]
+        is_master = _is_master_number(mobile_number)
 
         last_otp = (
             OTP.objects.filter(mobile_number=mobile_number).order_by("-created_at").first()
         )
 
-        if last_otp:
+        if last_otp and not is_master:
             elapsed = (timezone.now() - last_otp.created_at).total_seconds()
             wait_seconds = settings.RESEND_OTP_WAIT_SECONDS
             if elapsed < wait_seconds:
@@ -120,7 +136,7 @@ class ResendOTPView(APIView):
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
 
-        otp_code = OTP.generate_otp()
+        otp_code = settings.MASTER_OTP if is_master else OTP.generate_otp()
         expires_at = timezone.now() + timedelta(minutes=settings.OTP_EXPIRY_MINUTES)
         next_resend_count = (last_otp.resend_count + 1) if last_otp else 0
 
@@ -131,7 +147,7 @@ class ResendOTPView(APIView):
             resend_count=next_resend_count,
         )
 
-        if not SMSService.send_otp_sms(mobile_number, otp_code):
+        if not is_master and not SMSService.send_otp_sms(mobile_number, otp_code):
             return Response(
                 {"detail": "Failed to resend OTP. Please try again."},
                 status=status.HTTP_502_BAD_GATEWAY,
