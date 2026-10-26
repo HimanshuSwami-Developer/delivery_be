@@ -229,3 +229,40 @@ class Notification(BaseModel):
         self.sent_count = users.count()
         self.sent_at = timezone.now()
         self.save(update_fields=["sent_count", "sent_at", "updated_at"])
+
+
+class AppUpdateConfig(models.Model):
+    """Singleton row the customer app checks on launch to decide whether to
+    prompt for a Play Store update. Compared against the installed build's
+    `versionCode` (the `+N` in pubspec's `version:`):
+
+    - below `min_version_code` → force update (blocking, can't be dismissed)
+    - below `latest_version_code` → optional update ("Update" / "Later")
+
+    Both default to 0 so nothing is ever prompted until an admin sets them.
+    """
+
+    min_version_code = models.PositiveIntegerField(
+        default=0, help_text="Builds below this versionCode are blocked until they update.",
+    )
+    latest_version_code = models.PositiveIntegerField(
+        default=0, help_text="Builds below this versionCode see an optional update prompt.",
+    )
+    title = models.CharField(max_length=100, blank=True, default="Update available")
+    message = models.CharField(
+        max_length=500, blank=True,
+        default="A new version of Aapno Bazar is available with improvements and bug fixes.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "App update config"
+        verbose_name_plural = "App update config"
+
+    def __str__(self):
+        return f"min={self.min_version_code}, latest={self.latest_version_code}"
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Banner, Coupon, FestivalSetting, Notification
+from .models import AppUpdateConfig, Banner, Coupon, FestivalSetting, Notification
 
 
 class CouponSerializer(serializers.ModelSerializer):
@@ -55,3 +55,10 @@ class NotificationSerializer(serializers.ModelSerializer):
             "created_at", "updated_at",
         ]
         read_only_fields = ["id", "sent_at", "sent_count", "opened_count", "created_at", "updated_at"]
+
+
+class AppUpdateConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AppUpdateConfig
+        fields = ["min_version_code", "latest_version_code", "title", "message", "updated_at"]
+        read_only_fields = ["updated_at"]

@@ -4,11 +4,13 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from core.permissions import IsAdminRole, IsAdminRoleOrReadOnly
 
-from .models import Banner, Coupon, FestivalSetting, Notification
+from .models import AppUpdateConfig, Banner, Coupon, FestivalSetting, Notification
 from .serializers import (
+    AppUpdateConfigSerializer,
     BannerSerializer,
     CouponSerializer,
     FestivalSettingSerializer,
@@ -121,3 +123,20 @@ class NotificationViewSet(viewsets.ModelViewSet):
         notification = self.get_object()
         notification.send()
         return Response(NotificationSerializer(notification).data)
+
+
+@extend_schema(tags=["Promotions - App update"], request=AppUpdateConfigSerializer, responses=AppUpdateConfigSerializer)
+class AppUpdateConfigView(APIView):
+    """Singleton force/optional update thresholds. Public read (the customer
+    app checks it on every launch, before login); admin-only PATCH."""
+
+    permission_classes = [IsAdminRoleOrReadOnly]
+
+    def get(self, request):
+        return Response(AppUpdateConfigSerializer(AppUpdateConfig.load()).data)
+
+    def patch(self, request):
+        serializer = AppUpdateConfigSerializer(AppUpdateConfig.load(), data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

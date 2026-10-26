@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Banner, Coupon, FestivalSetting, Notification
+from .models import AppUpdateConfig, Banner, Coupon, FestivalSetting, Notification
 
 
 @admin.register(Coupon)
@@ -30,3 +30,14 @@ class NotificationAdmin(admin.ModelAdmin):
     list_filter = ["audience"]
     search_fields = ["title", "body"]
     readonly_fields = ["sent_at", "sent_count"]
+
+
+@admin.register(AppUpdateConfig)
+class AppUpdateConfigAdmin(admin.ModelAdmin):
+    list_display = ["min_version_code", "latest_version_code", "title", "updated_at"]
+
+    def has_add_permission(self, request):
+        return not AppUpdateConfig.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
