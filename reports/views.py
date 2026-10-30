@@ -8,6 +8,7 @@ from django.db.models.functions import TruncDate, TruncMonth
 from django.http import HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from rest_framework.exceptions import ValidationError
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -16,6 +17,7 @@ from rest_framework.views import APIView
 from catalog.models import ProductStock
 from core.permissions import IsAdminRole
 from core.service.gst_report_service import GstReportService
+from core.service.sales_report_service import PERIODS, SalesReportService, default_range
 from orders.models import Order, OrderItem
 
 from .models import StoreSettings
@@ -270,6 +272,73 @@ class SalesReportExportView(APIView):
 
         response = HttpResponse(buffer.getvalue(), content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="sales-report-{months}m.csv"'
+        return response
+
+
+def _parse_delivered_sales_params(request):
+    """`period` (daily|weekly|monthly|yearly, default daily) plus optional
+    `start`/`end` (YYYY-MM-DD, IST). Without a range, each period gets its
+    own trailing window — see `sales_report_service.default_range`."""
+    period = request.query_params.get("period", "daily")
+    if period not in PERIODS:
+        raise ValidationError({"period": f"Must be one of: {', '.join(PERIODS)}."})
+    today = SalesReportService.today()
+    default_start, default_end = default_range(period, today)
+    try:
+        start = date.fromisoformat(request.query_params["start"]) if request.query_params.get("start") else default_start
+        end = date.fromisoformat(request.query_params["end"]) if request.query_params.get("end") else default_end
+    except ValueError:
+        raise ValidationError({"detail": "start/end must be YYYY-MM-DD."})
+    if start > end:
+        raise ValidationError({"detail": "start must be on or before end."})
+    return period, start, min(end, today)
+
+
+_DELIVERED_SALES_PARAMS = [
+    OpenApiParameter("period", str, enum=list(PERIODS), description="Bucket size (default daily)."),
+    OpenApiParameter("start", str, description="YYYY-MM-DD (IST). Defaults to a trailing window per period."),
+    OpenApiParameter("end", str, description="YYYY-MM-DD (IST). Defaults to today."),
+]
+
+
+@extend_schema(tags=["Admin Reports"])
+class DeliveredSalesReportView(APIView):
+    """GET /api/admin/reports/sales/delivered/?period=weekly -> successfully
+    delivered sales grouped by day/week/month/year (IST), with totals,
+    COD/online split and every bucket in range (empty ones as zero)."""
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    @extend_schema(parameters=_DELIVERED_SALES_PARAMS)
+    def get(self, request):
+        period, start, end = _parse_delivered_sales_params(request)
+        data = SalesReportService.build(period, start, end)
+        data.pop("_orders")
+        return Response(data)
+
+
+@extend_schema(tags=["Admin Reports"])
+class DeliveredSalesExportView(APIView):
+    """GET /api/admin/reports/sales/delivered/export/?period=monthly -> the
+    same report as an Excel workbook: a Summary sheet (KPIs + per-period
+    table), every delivered order, and product-wise units/revenue."""
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    @extend_schema(
+        parameters=_DELIVERED_SALES_PARAMS,
+        responses={200: OpenApiResponse(description="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    def get(self, request):
+        period, start, end = _parse_delivered_sales_params(request)
+        data = SalesReportService.build(period, start, end)
+        xlsx = SalesReportService.render_xlsx(data)
+        response = HttpResponse(
+            xlsx, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = (
+            f'attachment; filename="delivered-sales-{period}-{start.isoformat()}-to-{end.isoformat()}.xlsx"'
+        )
         return response
 
 
