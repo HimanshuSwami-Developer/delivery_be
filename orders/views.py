@@ -1,4 +1,5 @@
 from django.http import HttpResponse
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status, viewsets
@@ -14,7 +15,9 @@ from .serializers import (
     AssignDeliveryPartnerSerializer,
     OrderDetailSerializer,
     OrderListSerializer,
+    OrderTrackingSerializer,
     PlaceOrderSerializer,
+    RiderLocationSerializer,
     SetOrderStatusSerializer,
     StoreLocationSerializer,
 )
@@ -129,6 +132,38 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="receipt-{order.order_number}.pdf"'
         return response
+
+    @extend_schema(
+        summary="Live tracking snapshot (status + rider GPS)",
+        description="Polled every few seconds by the customer's tracking map. Same visibility as `retrieve`.",
+        responses={200: OrderTrackingSerializer},
+    )
+    @action(detail=True, methods=["get"])
+    def tracking(self, request, pk=None):
+        return Response(OrderTrackingSerializer(self.get_object()).data)
+
+    @extend_schema(
+        summary="[Delivery] Report my current GPS position for this order",
+        description="Sent by the rider app while the order is out for delivery. Only the assigned partner "
+                    "(or an admin) can reach it — `get_queryset` scopes delivery boys to their own orders.",
+        request=RiderLocationSerializer,
+        responses={204: None},
+    )
+    @action(detail=True, methods=["post"], permission_classes=[IsAdminOrDeliveryBoyRole])
+    def rider_location(self, request, pk=None):
+        order = self.get_object()
+        if order.status != Order.Status.OUT_FOR_DELIVERY:
+            return Response({"detail": "Order is not out for delivery."}, status=status.HTTP_409_CONFLICT)
+        serializer = RiderLocationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order.rider_latitude = serializer.validated_data["latitude"]
+        order.rider_longitude = serializer.validated_data["longitude"]
+        order.rider_heading = serializer.validated_data.get("heading")
+        order.rider_location_updated_at = timezone.now()
+        order.save(update_fields=[
+            "rider_latitude", "rider_longitude", "rider_heading", "rider_location_updated_at", "updated_at",
+        ])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(summary="Store/warehouse pickup location", responses={200: StoreLocationSerializer})
     @action(detail=False, methods=["get"], permission_classes=[])

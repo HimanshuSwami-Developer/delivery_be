@@ -81,6 +81,13 @@ class Order(BaseModel):
     # always true for orders placed before this field existed.
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+    # Assigned delivery partner's last reported GPS fix while this order is
+    # out for delivery — pushed by the rider app (`OrderViewSet.rider_location`)
+    # and polled by the customer's live tracking map (`OrderViewSet.tracking`).
+    rider_latitude = models.FloatField(null=True, blank=True)
+    rider_longitude = models.FloatField(null=True, blank=True)
+    rider_heading = models.FloatField(null=True, blank=True, help_text="Degrees clockwise from north.")
+    rider_location_updated_at = models.DateTimeField(null=True, blank=True)
     gstin = models.CharField(max_length=20, blank=True, help_text="Buyer GSTIN for a B2B invoice; blank = B2C.")
 
     delivery_slot_date = models.DateField(null=True, blank=True)

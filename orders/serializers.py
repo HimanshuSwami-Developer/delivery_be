@@ -192,6 +192,29 @@ class StoreLocationSerializer(serializers.Serializer):
     longitude = serializers.FloatField()
 
 
+class RiderLocationSerializer(serializers.Serializer):
+    latitude = serializers.FloatField(min_value=-90, max_value=90)
+    longitude = serializers.FloatField(min_value=-180, max_value=180)
+    heading = serializers.FloatField(required=False, allow_null=True)
+
+
+class OrderTrackingSerializer(serializers.ModelSerializer):
+    """Lightweight payload the customer's live map polls every few seconds —
+    just enough to move the rider marker and advance the timeline, without
+    re-sending line items/address on every tick."""
+
+    delivery_partner_name = serializers.CharField(source="delivery_partner.name", read_only=True, default=None)
+
+    class Meta:
+        model = Order
+        fields = [
+            "id", "status", "delivery_partner", "delivery_partner_name", "latitude", "longitude",
+            "rider_latitude", "rider_longitude", "rider_heading", "rider_location_updated_at",
+            "packed_at", "out_for_delivery_at", "delivered_at",
+        ]
+        read_only_fields = fields
+
+
 class SetOrderStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Order.Status.choices)
 
