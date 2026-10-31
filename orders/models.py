@@ -1,3 +1,5 @@
+from decimal import ROUND_HALF_UP, Decimal
+
 import random
 import string
 
@@ -95,8 +97,11 @@ class Order(BaseModel):
 
     subtotal = models.PositiveIntegerField(default=0)
     discount = models.PositiveIntegerField(default=0)
-    cgst = models.PositiveIntegerField(default=0)
-    sgst = models.PositiveIntegerField(default=0)
+    # Taxable (pre-GST) value of the items, and the CGST/SGST inside the
+    # GST-inclusive item prices the customer paid — to the paisa.
+    taxable_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cgst = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     delivery_fee = models.PositiveIntegerField(default=19)
     total = models.PositiveIntegerField(default=0)
 
@@ -116,24 +121,23 @@ class Order(BaseModel):
         return sum(i.qty for i in self.items.all())
 
     def recalculate_totals(self, save=True):
-        """Sums each line's own GST slab (snapshotted onto `OrderItem.gst_slab`
-        at order-placement time) rather than one flat rate — this is what
-        lets the admin GST report break tax down by slab. The coupon
+        """`subtotal` is the sum of the GST-inclusive line totals (what the
+        customer saw in the app); `taxable_value`/`cgst`/`sgst` break that
+        down per line using each line's snapshotted CGST/SGST %. The coupon
         discount reduces the payable total but isn't apportioned back across
         lines for tax purposes (a deliberate simplification)."""
         items = list(self.items.all())
-        subtotal = sum(i.amount for i in items)
-        cgst = sum(i.cgst for i in items)
-        sgst = sum(i.sgst for i in items)
+        subtotal = sum(i.line_total for i in items)
         discount = self.coupon.discount_for(subtotal) if self.coupon_id else self.discount
 
         self.subtotal = subtotal
         self.discount = discount
-        self.cgst = cgst
-        self.sgst = sgst
-        self.total = max(subtotal - discount, 0) + cgst + sgst + self.delivery_fee
+        self.taxable_value = sum((i.amount for i in items), Decimal("0"))
+        self.cgst = sum((i.cgst for i in items), Decimal("0"))
+        self.sgst = sum((i.sgst for i in items), Decimal("0"))
+        self.total = max(subtotal - discount, 0) + self.delivery_fee
         if save:
-            self.save(update_fields=["subtotal", "discount", "cgst", "sgst", "total", "updated_at"])
+            self.save(update_fields=["subtotal", "discount", "taxable_value", "cgst", "sgst", "total", "updated_at"])
 
     _STATUS_TIMESTAMP_FIELD = {
         Status.PACKED: "packed_at",
@@ -225,7 +229,7 @@ class Order(BaseModel):
             "",
         ]
         for item in self.items.all():
-            lines.append(f"{item.product_name} x{item.qty} = Rs {item.amount}")
+            lines.append(f"{item.product_name} x{item.qty} = Rs {item.line_total}")
         lines.append("")
         if self.discount:
             lines.append(f"Subtotal: Rs {self.subtotal}  Discount: -Rs {self.discount}")
@@ -258,6 +262,10 @@ class Order(BaseModel):
             DeviceToken.objects.filter(token__in=invalid_tokens).delete()
 
 
+def _paise(value: Decimal) -> Decimal:
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 class OrderItem(BaseModel):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="order_items")
@@ -266,8 +274,13 @@ class OrderItem(BaseModel):
     # product is later renamed, re-priced, or moved to a different slab.
     product_name = models.CharField(max_length=255)
     pack = models.CharField(max_length=50, blank=True)
-    rate = models.PositiveIntegerField()
-    gst_slab = models.CharField(max_length=2, default="5")
+    rate = models.PositiveIntegerField(help_text="Base (pre-GST) price per unit, as set on the product.")
+    # GST-inclusive price per unit the customer paid. Null on orders placed
+    # before GST-inclusive pricing, where GST was added on top of `rate`.
+    unit_price = models.PositiveIntegerField(null=True, blank=True)
+    cgst_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    sgst_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    gst_slab = models.CharField(max_length=8, default="5", help_text="Total GST %, e.g. '5' or '12'.")
     qty = models.PositiveIntegerField(default=1)
 
     class Meta:
@@ -277,17 +290,40 @@ class OrderItem(BaseModel):
         return f"{self.product_name} x{self.qty}"
 
     @property
-    def amount(self):
-        return self.rate * self.qty
+    def _is_legacy(self):
+        return self.unit_price is None
 
     @property
-    def gst_amount(self):
-        return round(self.amount * float(self.gst_slab) / 100)
+    def line_total(self) -> int:
+        """GST-inclusive amount charged for this line."""
+        if self._is_legacy:
+            return self.rate * self.qty + int(self.gst_amount)
+        return self.unit_price * self.qty
 
     @property
-    def cgst(self):
-        return self.gst_amount // 2
+    def amount(self) -> Decimal:
+        """Taxable (pre-GST) value of this line."""
+        if self._is_legacy:
+            return Decimal(self.rate * self.qty)
+        total_pct = (self.cgst_pct or 0) + (self.sgst_pct or 0)
+        return _paise(Decimal(self.line_total) * 100 / (100 + total_pct))
 
     @property
-    def sgst(self):
+    def gst_amount(self) -> Decimal:
+        if self._is_legacy:
+            return Decimal(round(self.rate * self.qty * float(self.gst_slab) / 100))
+        return Decimal(self.line_total) - self.amount
+
+    @property
+    def cgst(self) -> Decimal:
+        if self._is_legacy:
+            return Decimal(int(self.gst_amount) // 2)
+        total_pct = (self.cgst_pct or 0) + (self.sgst_pct or 0)
+        if not total_pct:
+            return Decimal("0.00")
+        return _paise(self.gst_amount * self.cgst_pct / total_pct)
+
+    @property
+    def sgst(self) -> Decimal:
+        # Remainder, so taxable + CGST + SGST always equals the line total.
         return self.gst_amount - self.cgst

@@ -1,3 +1,5 @@
+from decimal import ROUND_HALF_UP, Decimal
+
 from django.conf import settings
 from django.db import models
 
@@ -33,6 +35,31 @@ class Subcategory(BaseModel):
         return f"{self.category.name} / {self.name}"
 
 
+class GstRate(BaseModel):
+    """An admin-defined GST rate (e.g. "GST 5%" = CGST 2.5% + SGST 2.5%),
+    created from the admin console's GST reports screen and picked per
+    product on the product form. The customer price is the product's base
+    `price` plus CGST + SGST — see `Product.selling_price`."""
+
+    name = models.CharField(max_length=50)
+    cgst_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    sgst_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["cgst_pct", "sgst_pct", "name"]
+
+    def __str__(self):
+        return f"{self.name} (CGST {self.cgst_pct}% + SGST {self.sgst_pct}%)"
+
+    @property
+    def total_pct(self):
+        return self.cgst_pct + self.sgst_pct
+
+
+def _rupees(value: Decimal) -> int:
+    return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
 class Product(BaseModel):
     class GstSlab(models.TextChoices):
         ZERO = "0", "0%"
@@ -55,7 +82,12 @@ class Product(BaseModel):
     cost_price = models.PositiveIntegerField(
         null=True, blank=True, help_text="What we pay for it; used to compute margin_pct. Optional."
     )
+    # Legacy fixed slab — only used when `gst_rate` is unset.
     gst_slab = models.CharField(max_length=2, choices=GstSlab.choices, default=GstSlab.FIVE)
+    gst_rate = models.ForeignKey(
+        GstRate, on_delete=models.PROTECT, null=True, blank=True, related_name="products",
+        help_text="CGST/SGST applied on top of `price` to get the customer price.",
+    )
     rating = models.DecimalField(max_digits=2, decimal_places=1, default=0)
     ratings_count = models.PositiveIntegerField(default=0)
     is_out_of_stock = models.BooleanField(
@@ -70,10 +102,32 @@ class Product(BaseModel):
         return f"{self.name} ({self.sku})"
 
     @property
+    def cgst_pct(self) -> Decimal:
+        if self.gst_rate_id:
+            return self.gst_rate.cgst_pct
+        return Decimal(self.gst_slab or "0") / 2
+
+    @property
+    def sgst_pct(self) -> Decimal:
+        if self.gst_rate_id:
+            return self.gst_rate.sgst_pct
+        return Decimal(self.gst_slab or "0") / 2
+
+    @property
+    def gst_pct(self) -> Decimal:
+        return self.cgst_pct + self.sgst_pct
+
+    @property
+    def selling_price(self) -> int:
+        """What the customer sees and pays per unit: base `price` + CGST +
+        SGST, rounded to the nearest whole rupee."""
+        return _rupees(Decimal(self.price) * (100 + self.gst_pct) / 100)
+
+    @property
     def discount_pct(self):
         if not self.mrp:
             return 0
-        return round(100 * (1 - self.price / self.mrp))
+        return max(round(100 * (1 - self.selling_price / self.mrp)), 0)
 
     @property
     def margin_pct(self):

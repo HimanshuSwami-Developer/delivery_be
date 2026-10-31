@@ -129,7 +129,7 @@ class CartCouponView(APIView):
         if not coupon.is_valid_now(user=request.user):
             return Response({"detail": f'"{code}" is not a valid code.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        subtotal = sum(ci.product.price * ci.qty for ci in cart.items.all())
+        subtotal = sum(ci.product.selling_price * ci.qty for ci in cart.items.all())
         if subtotal < coupon.min_order_value:
             return Response(
                 {"detail": f"Add ₹{coupon.min_order_value - subtotal} more to use {code}."},

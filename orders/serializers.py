@@ -9,11 +9,19 @@ from .models import Order, OrderItem
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    amount = serializers.ReadOnlyField()
+    # `amount` = taxable value of the line; `line_total` = GST-inclusive
+    # amount the customer paid (= amount + cgst + sgst).
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    cgst = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    sgst = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    line_total = serializers.ReadOnlyField()
 
     class Meta:
         model = OrderItem
-        fields = ["id", "product", "product_name", "pack", "rate", "gst_slab", "qty", "amount"]
+        fields = [
+            "id", "product", "product_name", "pack", "rate", "unit_price", "gst_slab",
+            "cgst_pct", "sgst_pct", "qty", "amount", "cgst", "sgst", "line_total",
+        ]
         read_only_fields = fields
 
 
@@ -29,7 +37,7 @@ class OrderListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "order_number", "customer", "customer_name", "customer_mobile",
             "delivery_partner", "delivery_partner_name", "status", "payment_mode", "payment_status", "item_count",
-            "subtotal", "discount", "cgst", "sgst", "delivery_fee", "total", "address", "latitude", "longitude",
+            "subtotal", "discount", "taxable_value", "cgst", "sgst", "delivery_fee", "total", "address", "latitude", "longitude",
             "created_at",
         ]
 
@@ -107,7 +115,7 @@ class PlaceOrderSerializer(serializers.Serializer):
 
         request = self.context["request"]
         cart, _ = Cart.objects.get_or_create(user=request.user)
-        cart_items = list(cart.items.select_related("product"))
+        cart_items = list(cart.items.select_related("product", "product__gst_rate"))
         if not cart_items:
             raise serializers.ValidationError("Your cart is empty.")
 
@@ -116,7 +124,7 @@ class PlaceOrderSerializer(serializers.Serializer):
 
         from reports.models import StoreSettings  # deferred, same reason as Cart above
 
-        item_total = sum(ci.product.price * ci.qty for ci in cart_items)
+        item_total = sum(ci.product.selling_price * ci.qty for ci in cart_items)
         delivery_fee = StoreSettings.load().delivery_fee_for(item_total)
 
         with transaction.atomic():
@@ -149,7 +157,10 @@ class PlaceOrderSerializer(serializers.Serializer):
                         product_name=ci.product.name,
                         pack=ci.product.pack,
                         rate=ci.product.price,
-                        gst_slab=ci.product.gst_slab,
+                        unit_price=ci.product.selling_price,
+                        cgst_pct=ci.product.cgst_pct,
+                        sgst_pct=ci.product.sgst_pct,
+                        gst_slab=f"{ci.product.gst_pct.normalize():f}",
                         qty=ci.qty,
                     )
                     for ci in cart_items

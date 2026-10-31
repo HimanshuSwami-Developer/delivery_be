@@ -64,21 +64,22 @@ class InvoiceService:
         story.append(Paragraph(bill_to, body))
         story.append(Spacer(1, 8 * mm))
 
-        header = ["#", "Item", "Pack", "Qty", "Rate", "Amount", "GST%", "CGST", "SGST"]
+        header = ["#", "Item", "Qty", "Taxable", "GST%", "CGST", "SGST", "Total"]
         rows = [header]
         for i, item in enumerate(order.items.all(), start=1):
+            name = f"{item.product_name} ({item.pack})" if item.pack else item.product_name
             rows.append([
-                str(i), item.product_name, item.pack or "—", str(item.qty),
-                f"Rs {item.rate}", f"Rs {item.amount}", f"{item.gst_slab}%", f"Rs {item.cgst}", f"Rs {item.sgst}",
+                str(i), name, str(item.qty), f"Rs {item.amount}", f"{item.gst_slab}%",
+                f"Rs {item.cgst}", f"Rs {item.sgst}", f"Rs {item.line_total}",
             ])
 
-        items_table = Table(rows, colWidths=[8 * mm, 48 * mm, 20 * mm, 12 * mm, 18 * mm, 20 * mm, 14 * mm, 18 * mm, 18 * mm], repeatRows=1)
+        items_table = Table(rows, colWidths=[8 * mm, 56 * mm, 10 * mm, 22 * mm, 13 * mm, 20 * mm, 20 * mm, 22 * mm], repeatRows=1)
         items_table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), _INK),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("FONTSIZE", (0, 0), (-1, -1), 8.5),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
+            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("GRID", (0, 0), (-1, -1), 0.5, _DIVIDER),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAF5EC")]),
@@ -88,12 +89,14 @@ class InvoiceService:
         story.append(items_table)
         story.append(Spacer(1, 8 * mm))
 
-        totals_rows = [["Subtotal", f"Rs {order.subtotal}"]]
+        totals_rows = [
+            ["Taxable value", f"Rs {_taxable_value(order)}"],
+            ["CGST", f"Rs {order.cgst}"],
+            ["SGST", f"Rs {order.sgst}"],
+        ]
         if order.discount:
             totals_rows.append(["Discount", f"-Rs {order.discount}"])
         totals_rows += [
-            ["CGST", f"Rs {order.cgst}"],
-            ["SGST", f"Rs {order.sgst}"],
             ["Delivery fee", f"Rs {order.delivery_fee}"],
             ["Grand total", f"Rs {order.total}"],
         ]
@@ -158,7 +161,7 @@ class InvoiceService:
 
         item_rows = [["Item", "Qty", "Amount"]]
         for item in items:
-            item_rows.append([item.product_name, str(item.qty), f"{item.amount}"])
+            item_rows.append([item.product_name, str(item.qty), f"{item.line_total}"])
         item_table = Table(item_rows, colWidths=[42 * mm, 10 * mm, 20 * mm])
         item_table.setStyle(TableStyle([
             ("FONTNAME", (0, 0), (-1, -1), "Courier"),
@@ -172,14 +175,14 @@ class InvoiceService:
         story.append(item_table)
         story.append(_receipt_rule())
 
-        totals_rows = [["Subtotal", f"Rs {order.subtotal}"]]
-        if order.discount:
-            totals_rows.append(["Discount", f"-Rs {order.discount}"])
+        totals_rows = [["Taxable value", f"Rs {_taxable_value(order)}"]]
         for slab, agg in slabs.items():
             if agg["cgst"]:
                 totals_rows.append([f"CGST {slab}%", f"Rs {agg['cgst']}"])
             if agg["sgst"]:
                 totals_rows.append([f"SGST {slab}%", f"Rs {agg['sgst']}"])
+        if order.discount:
+            totals_rows.append(["Discount", f"-Rs {order.discount}"])
         totals_rows.append(["Delivery fee", f"Rs {order.delivery_fee}"])
         totals_table = Table(totals_rows, colWidths=[42 * mm, 30 * mm])
         totals_table.setStyle(TableStyle([
@@ -206,6 +209,14 @@ class InvoiceService:
 
         doc.build(story)
         return buffer.getvalue()
+
+
+def _taxable_value(order):
+    """Stored on orders placed with GST-inclusive pricing; summed from the
+    lines for older orders (where it was 0 by default)."""
+    if order.taxable_value:
+        return order.taxable_value
+    return sum((i.amount for i in order.items.all()), 0)
 
 
 def _order_slab_breakdown(items):

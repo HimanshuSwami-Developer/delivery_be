@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     CategoryViewSet,
+    GstRateViewSet,
     ImageUploadView,
     ProductImageViewSet,
     ProductReviewViewSet,
@@ -15,6 +16,7 @@ app_name = "catalog"
 
 router = DefaultRouter()
 router.register("categories", CategoryViewSet, basename="category")
+router.register("gst-rates", GstRateViewSet, basename="gst-rate")
 router.register("subcategories", SubcategoryViewSet, basename="subcategory")
 router.register("products", ProductViewSet, basename="product")
 router.register("product-images", ProductImageViewSet, basename="product-image")

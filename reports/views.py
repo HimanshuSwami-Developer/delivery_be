@@ -1,6 +1,7 @@
 import csv
 import json
 from datetime import date, timedelta
+from decimal import Decimal
 from io import StringIO
 
 from django.db.models import Count, DecimalField, F, Sum
@@ -88,26 +89,43 @@ def _sales_data(months):
 
 
 def _gst_slabs_data(year, month):
+    """Groups the month's line items by their snapshotted total GST % —
+    so any admin-defined rate shows up, not just 0/5/12/18 — summing each
+    line's own taxable value / CGST / SGST."""
     live_qs = Order.objects.exclude(status=Order.Status.CANCELLED).filter(
         created_at__year=year, created_at__month=month
     )
     items = OrderItem.objects.filter(order__in=live_qs)
 
+    by_slab = {}
+    for item in items:
+        row = by_slab.setdefault(
+            item.gst_slab,
+            {"taxable_value": Decimal("0"), "cgst": Decimal("0"), "sgst": Decimal("0"), "orders": set()},
+        )
+        row["taxable_value"] += item.amount
+        row["cgst"] += item.cgst
+        row["sgst"] += item.sgst
+        row["orders"].add(item.order_id)
+
     rows = []
-    output_gst_total = 0
-    taxable_total = 0
-    for slab, label in [("0", "0%"), ("5", "5%"), ("12", "12%"), ("18", "18%")]:
-        slab_items = items.filter(gst_slab=slab)
-        taxable = sum(i.amount for i in slab_items)
-        tax = sum(i.gst_amount for i in slab_items)
-        cgst = tax // 2
-        sgst = tax - cgst
-        invoices = slab_items.values("order").distinct().count()
+    output_gst_total = Decimal("0")
+    taxable_total = Decimal("0")
+    for slab in sorted(by_slab, key=lambda s: Decimal(s or "0")):
+        agg = by_slab[slab]
+        tax = agg["cgst"] + agg["sgst"]
         rows.append(
-            {"slab": label, "taxable_value": taxable, "cgst": cgst, "sgst": sgst, "total_tax": tax, "invoices": invoices}
+            {
+                "slab": f"{slab}%",
+                "taxable_value": agg["taxable_value"],
+                "cgst": agg["cgst"],
+                "sgst": agg["sgst"],
+                "total_tax": tax,
+                "invoices": len(agg["orders"]),
+            }
         )
         output_gst_total += tax
-        taxable_total += taxable
+        taxable_total += agg["taxable_value"]
 
     return {
         "taxable_turnover": taxable_total,
@@ -408,7 +426,7 @@ class Gstr1ExportView(APIView):
             "b2b": [{"ctin": gstin, "inv": list(invoices.values())} for gstin, invoices in b2b_invoices_by_gstin.items()],
             "b2cs": list(b2cs_by_slab.values()),
         }
-        response = HttpResponse(json.dumps(payload, indent=2), content_type="application/json")
+        response = HttpResponse(json.dumps(payload, indent=2, default=float), content_type="application/json")
         response["Content-Disposition"] = f'attachment; filename="gstr1-{year:04d}-{month:02d}.json"'
         return response
 

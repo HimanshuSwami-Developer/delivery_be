@@ -13,9 +13,10 @@ from core.mixins import ReadAfterWriteMixin
 from core.permissions import IsAdminRole, IsAdminRoleOrReadOnly, IsOwnerOrAdmin
 
 from .filters import ProductFilter, ProductStockFilter
-from .models import Category, Product, ProductImage, ProductReview, ProductStock, Subcategory
+from .models import Category, GstRate, Product, ProductImage, ProductReview, ProductStock, Subcategory
 from .serializers import (
     CategorySerializer,
+    GstRateSerializer,
     ProductDetailSerializer,
     ProductImageSerializer,
     ProductListSerializer,
@@ -37,6 +38,30 @@ class CategoryViewSet(viewsets.ModelViewSet):
     lookup_field = "key"
     filter_backends = [filters.SearchFilter]
     search_fields = ["name", "key"]
+
+
+@extend_schema(tags=["Catalog - GST rates"])
+class GstRateViewSet(viewsets.ModelViewSet):
+    """Admin-defined CGST/SGST rates (created from the GST reports screen,
+    picked per product). Public read so any client can show the breakdown;
+    admin-only write. A rate still used by products can't be deleted."""
+
+    queryset = GstRate.objects.all()
+    serializer_class = GstRateSerializer
+    permission_classes = [IsAdminRoleOrReadOnly]
+    pagination_class = None
+
+    def destroy(self, request, *args, **kwargs):
+        rate = self.get_object()
+        if rate.products.exists():
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError({"detail": "This GST rate is used by products. Move them to another rate first."})
+        rate.soft_delete()
+        from rest_framework import status
+        from rest_framework.response import Response
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema(tags=["Catalog - Categories"])
@@ -79,7 +104,7 @@ class ProductViewSet(ReadAfterWriteMixin, viewsets.ModelViewSet):
     etc. back — not just the plain FK ids they posted.
     """
 
-    queryset = Product.objects.select_related("category", "subcategory").prefetch_related("images", "reviews")
+    queryset = Product.objects.select_related("category", "subcategory", "gst_rate").prefetch_related("images", "reviews")
     permission_classes = [IsAdminRoleOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ProductFilter

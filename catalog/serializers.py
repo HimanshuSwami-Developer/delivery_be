@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Category, Product, ProductImage, ProductReview, ProductStock, Subcategory
+from .models import Category, GstRate, Product, ProductImage, ProductReview, ProductStock, Subcategory
 
 
 class SubcategorySerializer(serializers.ModelSerializer):
@@ -47,6 +47,26 @@ class ProductReviewSerializer(serializers.ModelSerializer):
         extra_kwargs = {"product": {"write_only": True}}
 
 
+class GstRateSerializer(serializers.ModelSerializer):
+    total_pct = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
+    product_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GstRate
+        fields = ["id", "name", "cgst_pct", "sgst_pct", "total_pct", "product_count", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def get_product_count(self, obj):
+        return obj.products.count()
+
+    def validate(self, attrs):
+        for field in ("cgst_pct", "sgst_pct"):
+            value = attrs.get(field)
+            if value is not None and not (0 <= value <= 50):
+                raise serializers.ValidationError({field: "Must be between 0 and 50."})
+        return attrs
+
+
 class ProductListSerializer(serializers.ModelSerializer):
     """Lightweight shape for grid/list screens (home, category list, search,
     admin products table)."""
@@ -54,13 +74,20 @@ class ProductListSerializer(serializers.ModelSerializer):
     cat = serializers.CharField(source="category.key", read_only=True)
     sub = serializers.CharField(source="subcategory.name", read_only=True, default=None)
     discount_pct = serializers.ReadOnlyField()
+    # `price` is the admin-entered base price; `selling_price` (base + CGST
+    # + SGST, whole rupees) is what customers see and pay.
+    selling_price = serializers.ReadOnlyField()
+    cgst_pct = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
+    sgst_pct = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
+    gst_rate_name = serializers.CharField(source="gst_rate.name", read_only=True, default=None)
 
     class Meta:
         model = Product
         fields = [
             "id", "name", "brand", "cat", "sub", "category", "subcategory",
-            "pack", "sku", "mrp", "price", "discount_pct", "rating", "ratings_count",
+            "pack", "sku", "mrp", "price", "selling_price", "discount_pct", "rating", "ratings_count",
             "is_out_of_stock", "is_active", "main_image_url", "gst_slab",
+            "gst_rate", "gst_rate_name", "cgst_pct", "sgst_pct",
         ]
 
 
@@ -90,7 +117,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             "id", "name", "brand", "category", "subcategory", "pack", "sku", "hsn_code",
-            "description", "mrp", "price", "cost_price", "gst_slab", "is_out_of_stock", "is_active",
+            "description", "mrp", "price", "cost_price", "gst_slab", "gst_rate", "is_out_of_stock", "is_active",
             "main_image_url", "initial_stock",
         ]
         read_only_fields = ["id"]

@@ -18,7 +18,7 @@ class CartItemSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
     def get_amount(self, obj):
-        return obj.product.price * obj.qty
+        return obj.product.selling_price * obj.qty
 
 
 class CartSerializer(serializers.ModelSerializer):
@@ -40,7 +40,7 @@ class CartSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "coupon"]
 
     def _subtotal(self, obj):
-        return sum(ci.product.price * ci.qty for ci in obj.items.all())
+        return sum(ci.product.selling_price * ci.qty for ci in obj.items.all())
 
     def get_subtotal(self, obj):
         return self._subtotal(obj)
