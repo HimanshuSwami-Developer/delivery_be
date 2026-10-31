@@ -3,11 +3,9 @@ from rest_framework import serializers
 from catalog.models import Product
 from catalog.serializers import ProductListSerializer
 
-from .models import Cart, CartItem, WishlistItem
+from reports.models import StoreSettings
 
-# Matches BasketCubit.freeDeliveryAbove / the flat delivery fee below it.
-FREE_DELIVERY_ABOVE = 199
-DELIVERY_FEE = 29
+from .models import Cart, CartItem, WishlistItem
 
 
 class CartItemSerializer(serializers.ModelSerializer):
@@ -60,8 +58,8 @@ class CartSerializer(serializers.ModelSerializer):
         return 0
 
     def get_delivery_fee(self, obj):
-        subtotal = self._subtotal(obj)
-        return 0 if (subtotal == 0 or subtotal >= FREE_DELIVERY_ABOVE) else DELIVERY_FEE
+        # Admin-controlled — see `StoreSettings.delivery_fee_for`.
+        return StoreSettings.load().delivery_fee_for(self._subtotal(obj))
 
     def get_total(self, obj):
         subtotal = self._subtotal(obj)

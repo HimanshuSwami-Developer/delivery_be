@@ -114,9 +114,15 @@ class PlaceOrderSerializer(serializers.Serializer):
         screenshot = validated_data.get("payment_screenshot")
         screenshot_url = cloudinary_upload_image(screenshot, folder="payment_screenshots") if screenshot else ""
 
+        from reports.models import StoreSettings  # deferred, same reason as Cart above
+
+        item_total = sum(ci.product.price * ci.qty for ci in cart_items)
+        delivery_fee = StoreSettings.load().delivery_fee_for(item_total)
+
         with transaction.atomic():
             order = Order.objects.create(
                 customer=request.user,
+                delivery_fee=delivery_fee,
                 payment_mode=validated_data["payment_mode"],
                 # `or ""` (not just `.get(key, "")`) so this stays safe even if
                 # a future caller passes an explicit `None` for one of these —

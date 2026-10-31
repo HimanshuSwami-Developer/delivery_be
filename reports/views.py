@@ -21,7 +21,7 @@ from core.service.sales_report_service import PERIODS, SalesReportService, defau
 from orders.models import Order, OrderItem
 
 from .models import StoreSettings
-from .serializers import StoreSettingsSerializer
+from .serializers import DeliverySettingsSerializer, StoreSettingsSerializer
 
 
 def _parse_month(request):
@@ -447,6 +447,20 @@ class StoreSettingsView(RetrieveUpdateAPIView):
 
     permission_classes = [IsAuthenticated, IsAdminRole]
     serializer_class = StoreSettingsSerializer
+
+    def get_object(self):
+        return StoreSettings.load()
+
+
+@extend_schema(tags=["Admin Reports"])
+class DeliverySettingsView(RetrieveUpdateAPIView):
+    """GET/PATCH /api/admin/reports/delivery-settings/ -> the flat delivery
+    fee and the free-delivery threshold, edited from the admin console's
+    "Delivery charges" page. Applies to the very next cart fetch / order."""
+
+    permission_classes = [IsAuthenticated, IsAdminRole]
+    serializer_class = DeliverySettingsSerializer
+    http_method_names = ["get", "patch"]
 
     def get_object(self):
         return StoreSettings.load()

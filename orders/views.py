@@ -9,6 +9,8 @@ from rest_framework.response import Response
 from accounts.models import User
 from core.permissions import IsAdminOrDeliveryBoyRole, IsAdminRole
 from core.service.invoice_service import InvoiceService
+from reports.models import StoreSettings
+from reports.serializers import DeliverySettingsSerializer
 
 from .models import Order
 from .serializers import (
@@ -164,6 +166,16 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
             "rider_latitude", "rider_longitude", "rider_heading", "rider_location_updated_at", "updated_at",
         ])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        summary="Delivery fee + free-delivery threshold",
+        description="Public — the customer app shows the fee and a \"₹X more for free delivery\" nudge in the cart. "
+                    "Set by admins via `/api/admin/reports/delivery-settings/`.",
+        responses={200: DeliverySettingsSerializer},
+    )
+    @action(detail=False, methods=["get"], permission_classes=[])
+    def delivery_settings(self, request):
+        return Response(DeliverySettingsSerializer(StoreSettings.load()).data)
 
     @extend_schema(summary="Store/warehouse pickup location", responses={200: StoreLocationSerializer})
     @action(detail=False, methods=["get"], permission_classes=[])

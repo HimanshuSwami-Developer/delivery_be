@@ -13,6 +13,16 @@ class StoreSettings(models.Model):
     business_name = models.CharField(max_length=255, blank=True, default="")
     address = models.CharField(max_length=500, blank=True, default="")
     gstin = models.CharField(max_length=20, blank=True, default="")
+
+    # Delivery charges — edited from the admin console's "Delivery charges"
+    # page and applied by both the cart (`CartSerializer`) and order
+    # placement (`PlaceOrderSerializer`) via `delivery_fee_for`, so the fee
+    # the customer sees is the fee they're charged.
+    delivery_fee = models.PositiveIntegerField(default=19, help_text="Flat fee (₹) per order.")
+    free_delivery_enabled = models.BooleanField(default=True)
+    free_delivery_above = models.PositiveIntegerField(
+        default=199, help_text="Item total (₹) at or above which delivery is free."
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -25,6 +35,16 @@ class StoreSettings(models.Model):
     def load(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+    def delivery_fee_for(self, item_total: int) -> int:
+        """Fee for a basket whose items add up to [item_total] (before any
+        coupon) — free once it reaches the threshold, and never charged on
+        an empty basket."""
+        if item_total <= 0:
+            return 0
+        if self.free_delivery_enabled and item_total >= self.free_delivery_above:
+            return 0
+        return self.delivery_fee
 
     @property
     def resolved_business_name(self):
