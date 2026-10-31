@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status, viewsets
@@ -31,6 +32,20 @@ class CouponViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["is_active"]
 
+    def get_queryset(self):
+        """Admins see every coupon. Everyone else sees general coupons plus
+        only their *own* personal ones (`assigned_to`, e.g. referral
+        rewards) — never another customer's."""
+        from accounts.models import User
+
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_authenticated and (user.role == User.Role.ADMIN or user.is_superuser):
+            return qs
+        if user.is_authenticated:
+            return qs.filter(Q(assigned_to__isnull=True) | Q(assigned_to=user))
+        return qs.filter(assigned_to__isnull=True)
+
     @extend_schema(
         summary="Validate a coupon code against a cart subtotal",
         request=ValidateCouponSerializer,
@@ -50,6 +65,10 @@ class CouponViewSet(viewsets.ModelViewSet):
                 {"valid": False, "detail": f'You\'ve already used "{code}" — it\'s a one-time code per customer.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Someone else's personal coupon reads as simply invalid, same as
+        # `CartCouponView` — and doesn't confirm the code exists.
+        if coupon and coupon.assigned_to_id and (user is None or coupon.assigned_to_id != user.id):
+            coupon = None
         if not coupon or not coupon.is_valid_now(user=user):
             return Response({"valid": False, "detail": f'"{code}" is not a valid code.'}, status=status.HTTP_400_BAD_REQUEST)
         if subtotal < coupon.min_order_value:
