@@ -209,7 +209,7 @@ class DashboardReportView(APIView):
             {
                 "id": o.id,
                 "order_number": o.order_number,
-                "customer": o.customer.name or o.customer.mobile_number,
+                "customer": o.customer.display_name or o.customer.mobile_number,
                 "item_count": o.item_count,
                 "total": o.total,
                 "delivery_partner": o.delivery_partner.name if o.delivery_partner else None,

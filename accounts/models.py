@@ -62,6 +62,18 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return f"{self.mobile_number} ({self.role})"
 
+    @property
+    def display_name(self):
+        """The customer's name — the app saves it on `Profile.name`, with
+        `User.name` only set for some accounts, so check both."""
+        if self.name:
+            return self.name
+        profile = getattr(self, "profile", None)
+        try:
+            return (profile.name if profile else "") or ""
+        except Exception:
+            return ""
+
 
 class DeviceToken(BaseModel):
     """

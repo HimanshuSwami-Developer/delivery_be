@@ -126,7 +126,7 @@ class SalesReportService:
             order_rows.append({
                 "order_number": o.order_number,
                 "delivered_at": o.sold_at.astimezone(STORE_TZ),
-                "customer": getattr(o.customer, "name", None) or o.customer.mobile_number,
+                "customer": o.customer.display_name or o.customer.mobile_number,
                 "mobile": o.customer.mobile_number,
                 "payment_mode": o.get_payment_mode_display(),
                 "items": o.units or 0,

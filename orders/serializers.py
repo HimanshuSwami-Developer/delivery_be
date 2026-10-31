@@ -1,4 +1,7 @@
+from zoneinfo import ZoneInfo
+
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from core.helper.cloudinary_service import upload_image as cloudinary_upload_image
@@ -6,6 +9,8 @@ from core.service import groq_service
 from delivery.models import DeliveryPartner
 
 from .models import Order, OrderItem
+
+STORE_TZ = ZoneInfo("Asia/Kolkata")
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -26,7 +31,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 
 class OrderListSerializer(serializers.ModelSerializer):
-    customer_name = serializers.CharField(source="customer.name", read_only=True, default=None)
+    customer_name = serializers.CharField(source="customer.display_name", read_only=True, default=None)
     customer_mobile = serializers.CharField(source="customer.mobile_number", read_only=True)
     delivery_partner_name = serializers.CharField(source="delivery_partner.name", read_only=True, default=None)
     item_count = serializers.ReadOnlyField()
@@ -35,7 +40,7 @@ class OrderListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            "id", "order_number", "customer", "customer_name", "customer_mobile",
+            "id", "order_number", "invoice_number", "customer", "customer_name", "customer_mobile",
             "delivery_partner", "delivery_partner_name", "status", "payment_mode", "payment_status", "item_count",
             "subtotal", "discount", "taxable_value", "cgst", "sgst", "delivery_fee", "total", "address", "latitude", "longitude",
             "created_at",
@@ -122,13 +127,14 @@ class PlaceOrderSerializer(serializers.Serializer):
         screenshot = validated_data.get("payment_screenshot")
         screenshot_url = cloudinary_upload_image(screenshot, folder="payment_screenshots") if screenshot else ""
 
-        from reports.models import StoreSettings  # deferred, same reason as Cart above
+        from reports.models import StoreSettings, next_invoice_number  # deferred, same reason as Cart above
 
         item_total = sum(ci.product.selling_price * ci.qty for ci in cart_items)
         delivery_fee = StoreSettings.load().delivery_fee_for(item_total)
 
         with transaction.atomic():
             order = Order.objects.create(
+                invoice_number=next_invoice_number(timezone.localdate(timezone.now(), STORE_TZ)),
                 customer=request.user,
                 delivery_fee=delivery_fee,
                 payment_mode=validated_data["payment_mode"],

@@ -1,4 +1,6 @@
+from decimal import Decimal
 from io import BytesIO
+from zoneinfo import ZoneInfo
 
 from reports.models import StoreSettings
 from reportlab.lib import colors
@@ -10,6 +12,15 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 _INK = colors.HexColor("#0A1F3C")
 _MUTED = colors.HexColor("#75777C")
 _DIVIDER = colors.HexColor("#DDD5C4")
+_STORE_TZ = ZoneInfo("Asia/Kolkata")
+
+
+def _invoice_no(order):
+    return order.invoice_number or order.order_number
+
+
+def _local(dt):
+    return dt.astimezone(_STORE_TZ)
 
 
 class InvoiceService:
@@ -45,7 +56,12 @@ class InvoiceService:
         meta_table = Table(
             [
                 [Paragraph("TAX INVOICE", ParagraphStyle("title", parent=styles["Heading2"], textColor=_INK, fontSize=13)),
-                 Paragraph(f"Invoice #: <b>{order.order_number}</b><br/>Date: {order.created_at.strftime('%d %b %Y')}", body)],
+                 Paragraph(
+                     f"Invoice No: <b>{_invoice_no(order)}</b><br/>"
+                     f"Order: {order.order_number}<br/>"
+                     f"Date: {_local(order.created_at).strftime('%d %b %Y')}",
+                     body,
+                 )],
             ],
             colWidths=[95 * mm, 77 * mm],
         )
@@ -54,7 +70,7 @@ class InvoiceService:
         story.append(Spacer(1, 6 * mm))
 
         bill_to = "<br/>".join(filter(None, [
-            f"<b>Bill to:</b> {order.customer.name or 'Customer'}",
+            f"<b>Bill to:</b> {order.customer.display_name or 'Customer'}",
             order.customer.mobile_number,
             order.address_line1,
             order.address_line2,
@@ -153,8 +169,11 @@ class InvoiceService:
         story.append(Paragraph(f"GSTIN: {seller.resolved_gstin or '—'}", center_small))
         story.append(Spacer(1, 2 * mm))
         story.append(_receipt_rule())
-        story.append(Paragraph(f"Bill #: {order.order_number}", small))
-        story.append(Paragraph(f"Date: {order.created_at.strftime('%d-%m-%Y %I:%M %p')}", small))
+        story.append(Paragraph(f"Invoice No: {_invoice_no(order)}", small))
+        story.append(Paragraph(f"Order: {order.order_number}", small))
+        story.append(Paragraph(f"Date: {_local(order.created_at).strftime('%d-%m-%Y %I:%M %p')}", small))
+        customer = order.customer.display_name or "Customer"
+        story.append(Paragraph(f"Customer: {customer} · {order.customer.mobile_number}", small))
         if order.gstin:
             story.append(Paragraph(f"Buyer GSTIN: {order.gstin}", small))
         story.append(_receipt_rule())
@@ -178,9 +197,9 @@ class InvoiceService:
         totals_rows = [["Taxable value", f"Rs {_taxable_value(order)}"]]
         for slab, agg in slabs.items():
             if agg["cgst"]:
-                totals_rows.append([f"CGST {slab}%", f"Rs {agg['cgst']}"])
+                totals_rows.append([f"CGST {agg['cgst_pct']}%", f"Rs {agg['cgst']}"])
             if agg["sgst"]:
-                totals_rows.append([f"SGST {slab}%", f"Rs {agg['sgst']}"])
+                totals_rows.append([f"SGST {agg['sgst_pct']}%", f"Rs {agg['sgst']}"])
         if order.discount:
             totals_rows.append(["Discount", f"-Rs {order.discount}"])
         totals_rows.append(["Delivery fee", f"Rs {order.delivery_fee}"])
@@ -225,10 +244,20 @@ def _order_slab_breakdown(items):
     on the receipt instead of one flat rate."""
     agg = {}
     for item in items:
-        row = agg.setdefault(item.gst_slab, {"cgst": 0, "sgst": 0})
+        half = Decimal(item.gst_slab or "0") / 2
+        row = agg.setdefault(item.gst_slab, {
+            "cgst": 0, "sgst": 0,
+            "cgst_pct": _pct(item.cgst_pct if item.cgst_pct is not None else half),
+            "sgst_pct": _pct(item.sgst_pct if item.sgst_pct is not None else half),
+        })
         row["cgst"] += item.cgst
         row["sgst"] += item.sgst
     return dict(sorted(agg.items(), key=lambda kv: float(kv[0])))
+
+
+def _pct(value):
+    """2.50 -> "2.5", 9.00 -> "9"."""
+    return f"{Decimal(value).normalize():f}"
 
 
 def _receipt_rule():

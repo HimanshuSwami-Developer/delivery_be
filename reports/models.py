@@ -13,6 +13,9 @@ class StoreSettings(models.Model):
     business_name = models.CharField(max_length=255, blank=True, default="")
     address = models.CharField(max_length=500, blank=True, default="")
     gstin = models.CharField(max_length=20, blank=True, default="")
+    # Invoice numbers look like `<prefix>/<FY>/<0001>`, e.g. LTC/26-27/0001,
+    # restarting at 0001 every financial year (April–March).
+    invoice_prefix = models.CharField(max_length=10, blank=True, default="LTC")
 
     # Delivery charges — edited from the admin console's "Delivery charges"
     # page and applied by both the cart (`CartSerializer`) and order
@@ -57,3 +60,32 @@ class StoreSettings(models.Model):
     @property
     def resolved_gstin(self):
         return self.gstin or settings.INVOICE_SELLER_GSTIN
+
+
+class InvoiceSequence(models.Model):
+    """Last invoice number issued per financial year (e.g. "26-27") —
+    incremented under a row lock so concurrent orders never share or skip
+    a number. See `next_invoice_number`."""
+
+    financial_year = models.CharField(max_length=5, unique=True)
+    last_number = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.financial_year}: {self.last_number}"
+
+
+def financial_year_label(day) -> str:
+    """Indian FY (April–March) for a date: 31 Oct 2026 -> "26-27"."""
+    start = day.year if day.month >= 4 else day.year - 1
+    return f"{start % 100:02d}-{(start + 1) % 100:02d}"
+
+
+def next_invoice_number(day) -> str:
+    """Issues the next number in the series, e.g. LTC/26-27/0001. Must be
+    called inside a transaction (order placement is)."""
+    fy = financial_year_label(day)
+    seq, _ = InvoiceSequence.objects.select_for_update().get_or_create(financial_year=fy)
+    seq.last_number += 1
+    seq.save(update_fields=["last_number"])
+    prefix = (StoreSettings.load().invoice_prefix or "LTC").strip().strip("/")
+    return f"{prefix}/{fy}/{seq.last_number:04d}"

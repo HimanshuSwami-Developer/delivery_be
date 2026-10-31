@@ -41,6 +41,9 @@ class Order(BaseModel):
         FAILED = "failed", "Failed"
 
     order_number = models.CharField(max_length=20, unique=True, default=generate_order_number, editable=False)
+    # GST invoice number from the store's FY series, e.g. LTC/26-27/0001 —
+    # issued at placement. Null for orders placed before the series existed.
+    invoice_number = models.CharField(max_length=30, unique=True, null=True, blank=True, editable=False)
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="orders")
     delivery_partner = models.ForeignKey(
         "delivery.DeliveryPartner", on_delete=models.SET_NULL, null=True, blank=True, related_name="orders"
@@ -225,7 +228,7 @@ class Order(BaseModel):
     def _invoice_text(self):
         lines = [
             f"New order {self.order_number}",
-            f"{self.customer.name or 'Customer'} · {self.customer.mobile_number}",
+            f"{self.customer.display_name or 'Customer'} · {self.customer.mobile_number}",
             "",
         ]
         for item in self.items.all():
