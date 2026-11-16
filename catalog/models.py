@@ -2,6 +2,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from core.helper.base import BaseModel
 
@@ -94,12 +95,24 @@ class Product(BaseModel):
         default=False, help_text="Manual override; real stock lives in ProductStock."
     )
     main_image_url = models.URLField(blank=True)
+    best_before = models.CharField(
+        max_length=100, blank=True,
+        help_text="Shelf life as printed on the pack, e.g. '6 months from packaging'.",
+    )
+    expiry_date = models.DateField(
+        null=True, blank=True,
+        help_text="Expiry date of the batch currently in stock. Optional.",
+    )
 
     class Meta:
         ordering = ["name"]
 
     def __str__(self):
         return f"{self.name} ({self.sku})"
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expiry_date is not None and self.expiry_date < timezone.localdate()
 
     @property
     def cgst_pct(self) -> Decimal:

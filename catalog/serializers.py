@@ -80,6 +80,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     cgst_pct = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
     sgst_pct = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
     gst_rate_name = serializers.CharField(source="gst_rate.name", read_only=True, default=None)
+    is_expired = serializers.ReadOnlyField()
 
     class Meta:
         model = Product
@@ -88,6 +89,7 @@ class ProductListSerializer(serializers.ModelSerializer):
             "pack", "sku", "mrp", "price", "selling_price", "discount_pct", "rating", "ratings_count",
             "is_out_of_stock", "is_active", "main_image_url", "gst_slab",
             "gst_rate", "gst_rate_name", "cgst_pct", "sgst_pct",
+            "best_before", "expiry_date", "is_expired",
         ]
 
 
@@ -118,7 +120,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "brand", "category", "subcategory", "pack", "sku", "hsn_code",
             "description", "mrp", "price", "cost_price", "gst_slab", "gst_rate", "is_out_of_stock", "is_active",
-            "main_image_url", "initial_stock",
+            "main_image_url", "best_before", "expiry_date", "initial_stock",
         ]
         read_only_fields = ["id"]
 

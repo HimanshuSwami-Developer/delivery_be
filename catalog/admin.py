@@ -29,9 +29,9 @@ class ProductStockInline(admin.TabularInline):
 class ProductAdmin(admin.ModelAdmin):
     list_display = [
         "name", "sku", "brand", "category", "subcategory", "price", "mrp",
-        "is_out_of_stock", "is_active",
+        "expiry_date", "is_out_of_stock", "is_active",
     ]
-    list_filter = ["category", "subcategory", "is_out_of_stock", "is_active", "gst_slab"]
+    list_filter = ["category", "subcategory", "is_out_of_stock", "is_active", "gst_slab", "expiry_date"]
     search_fields = ["name", "brand", "sku"]
     inlines = [ProductImageInline, ProductStockInline]
     actions = ["mark_live", "mark_paused"]
