@@ -1,5 +1,6 @@
 from decimal import Decimal
 from io import BytesIO
+from xml.sax.saxutils import escape
 from zoneinfo import ZoneInfo
 
 from reports.models import StoreSettings
@@ -178,15 +179,19 @@ class InvoiceService:
             story.append(Paragraph(f"Buyer GSTIN: {order.gstin}", small))
         story.append(_receipt_rule())
 
+        # Item names go in a Paragraph so long names wrap inside their column
+        # instead of overflowing into Qty (plain strings never wrap).
+        item_name = ParagraphStyle("itemName", fontName="Courier", fontSize=7.5, leading=9)
         item_rows = [["Item", "Qty", "Amount"]]
         for item in items:
-            item_rows.append([item.product_name, str(item.qty), f"{item.line_total}"])
+            item_rows.append([Paragraph(escape(item.product_name), item_name), str(item.qty), f"{item.line_total}"])
         item_table = Table(item_rows, colWidths=[42 * mm, 10 * mm, 20 * mm])
         item_table.setStyle(TableStyle([
             ("FONTNAME", (0, 0), (-1, -1), "Courier"),
             ("FONTNAME", (0, 0), (-1, 0), "Courier-Bold"),
             ("FONTSIZE", (0, 0), (-1, -1), 7.5),
             ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LINEBELOW", (0, 0), (-1, 0), 0.5, _INK),
             ("TOPPADDING", (0, 0), (-1, -1), 1.5),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
