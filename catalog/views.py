@@ -39,6 +39,28 @@ class CategoryViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ["name", "key"]
 
+    def destroy(self, request, *args, **kwargs):
+        # Product.category is PROTECT, so a hard delete with products still
+        # attached raised ProtectedError and returned a 500.
+        category = self.get_object()
+        if category.products.exists():
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(
+                {"detail": "This category still has products. Delete them or move them to another category first."}
+            )
+        if Product.all_objects.filter(category=category).exists():
+            # Only soft-deleted (previously ordered) products remain, and
+            # they still PROTECT the row: soft-delete too, freeing the key.
+            suffix = f"-del{category.pk}"
+            category.key = f"{category.key[: 50 - len(suffix)]}{suffix}"
+            category.is_delete = True
+            category.is_active = False
+            category.save(update_fields=["key", "is_delete", "is_active", "updated_at"])
+        else:
+            category.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 @extend_schema(tags=["Catalog - GST rates"])
 class GstRateViewSet(viewsets.ModelViewSet):
@@ -122,6 +144,24 @@ class ProductViewSet(ReadAfterWriteMixin, viewsets.ModelViewSet):
         initial_stock = serializer.validated_data.get("initial_stock") or 0
         product = serializer.save()
         ProductStock.objects.create(product=product, on_hand=initial_stock)
+
+    def destroy(self, request, *args, **kwargs):
+        # OrderItem.product is PROTECT, so hard-deleting a product that was
+        # ever ordered raised ProtectedError (500) and the admin's Delete
+        # button did nothing. Products with order history are soft-deleted
+        # instead (hidden everywhere, past orders/invoices keep working);
+        # never-ordered products are removed outright.
+        product = self.get_object()
+        if product.order_items.exists():
+            # Free the unique SKU so a new product can reuse it.
+            suffix = f"~del{product.pk}"
+            product.sku = f"{product.sku[: 30 - len(suffix)]}{suffix}"
+            product.is_delete = True
+            product.is_active = False
+            product.save(update_fields=["sku", "is_delete", "is_active", "updated_at"])
+        else:
+            product.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -236,7 +276,7 @@ class ProductStockViewSet(viewsets.ModelViewSet):
     ordering = ["product__name"]
 
     def get_queryset(self):
-        return ProductStock.objects.select_related("product", "product__category").annotate(
+        return ProductStock.objects.filter(product__is_delete=False).select_related("product", "product__category").annotate(
             computed_state=Case(
                 When(on_hand__lte=0, then=Value(ProductStock.State.OUT)),
                 When(on_hand__lt=F("reorder_level"), then=Value(ProductStock.State.LOW)),
